@@ -65,6 +65,12 @@ git branch -r
 # checkout each branch returned from git branch -r
 git checkout -b local_branch remote_branch
 
+# create repo within project in bitbucket.
+# to create a project: json needs name, key, description.
+curl -D- -u user:password -X POST -d @/path/to/test.json -H "Content-Type: application/json" http://url.to.bitbucket/rest/api/1.0/projects/
+# to create repo: json needs name, has_wiki, is_private, and project with sub-info key.
+curl -D- -u user:password -X POST -d @/path/to/test.json -H "Content-Type: application/json" http://url.to.bitbucket/rest/api/1.0/projects/PROJECT_KEY/repos
+
 #Within nameOfGitRepo remote new git repo to Bitbucket.
 git remote add origin http://url.to.Bitbucket/scm/projectCode/repoName.git
 git push -u origin master
