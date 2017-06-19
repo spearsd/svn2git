@@ -1,15 +1,40 @@
 #!/bin/bash
 
-# install all prereqs needed
-yum install -y git-all subversion perl
+REPO_ARG=""
+REPO_LIST=""
 
-# true if git-all is installed
-if hash git-all 2>/dev/null; then
+installPrereqs() {
+	yum install -y git-all
+	if ! $(hash git 2>/dev/null); then
+		echo "installing git-all..."
+		yum install -y git-all
+		if ! $(hash git 2>/dev/null); then
+			echo "Unable to install git-all! Exiting..."
+			exit 1
+		fi
+	fi
+	if ! $(hash svn 2>/dev/null); then
+		echo "installing subversion..."
+		yum install -y subversion
+		if ! $(hash svn 2>/dev/null); then
+			echo "Unable to install subversion! Exiting..."
+			exit 1
+		fi
+	fi
+	if ! $(hash perl 2>/dev/null); then
+		echo "installing perl..."
+		yum install -y perl
+		if ! $(hash perl 2>/dev/null); then
+			echo "Unable to install perl! Exiting..."
+			exit 1
+		fi
+	fi
+}
 
 # example function to parse a file storing each
 # line into an array
 createArray() {
-    local array=() # Create array
+    local array=() # Create local var array
     while IFS= read -r line # Read a line
     do
         local array+=("$line") # Append line to the array
@@ -24,11 +49,12 @@ do
     echo "$e"
 done
 
-# example of how to parse a "-a <option>" passed argument
-while getopts ":a:" opt; do
+# example of how to parse a "-r <option>" passed argument
+while getopts ":r:" opt; do
   case $opt in
     a)
-      echo "-a was triggered, Parameter: $OPTARG" >&2
+      echo "-r was triggered, Parameter: $OPTARG" >&2
+	  # REPO_ARG=$OPTARG
       ;;
     \?)
       echo "Invalid option: -$OPTARG" >&2
@@ -40,6 +66,32 @@ while getopts ":a:" opt; do
       ;;
   esac
 done
+
+# only used if authors list is needed.
+svnCloneList() {
+	REPO_LIST=$(createArray "$REPO_ARG")
+	for r in "${REPO_LIST[@]}"
+	do
+		svn co $r
+		svn log --xml --quiet | grep author | sort -u | perl -pe 's/.*>(.*?)<.*/$1 = /' >> authors.txt
+	done
+}
+
+gitCloneList() {
+	REPO_LIST=$(createArray "$REPO_ARG")
+	for r in "${REPO_LIST[@]}"
+	do
+		local repo_name=$(echo "$r" | rev | cut -d '/' -f 1 | rev)
+		git svn clone $r --authors-file=authors.txt --no-metadata --prefix"" -s $repo_name
+		local branches=$(git branch -r)
+		branch_array=$(createArray "branches")
+		# only for loop when the branch doesn't begin with tag
+		for b in "${branch_array[@]}"
+		do
+			git checkout -b $b $b
+		done
+	done
+}
 
 # loop over an svn repo list array from file
 # then need to pull out repository name here using grep?
@@ -71,8 +123,13 @@ curl -D- -u user:password -X POST -d @/path/to/test.json -H "Content-Type: appli
 # to create repo: json needs name, has_wiki, is_private, and project with sub-info key.
 curl -D- -u user:password -X POST -d @/path/to/test.json -H "Content-Type: application/json" http://url.to.bitbucket/rest/api/1.0/projects/PROJECT_KEY/repos
 
+
 #Within nameOfGitRepo remote new git repo to Bitbucket.
+# use REST API to create repo/project
 git remote add origin http://url.to.Bitbucket/scm/projectCode/repoName.git
-git push -u origin master
+git push -u origin all
+# another git push for tags
 
 # svn > git > pull all branches > clone old git into new git > push to bitbucket
+
+installPrereqs()
