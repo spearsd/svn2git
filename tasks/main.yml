@@ -1,2 +1,23 @@
 ---
-# tasks file for svn2git
+#tasks file for svn2git
+- name: install required packages
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - "git-all"
+    - "subversion"
+    - "perl"
+  become: true
+  become_user: root
+
+- name: create directory
+  file:
+    path: /opt/svn2git
+    state: directory
+    mode: 0755
+  become: true
+  become_user: root
+
+- name: include list creation
+  include: create_lists.yml

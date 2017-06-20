@@ -1,0 +1,29 @@
+{% set result = repo_list.stdout_lines|length/groups.all|length %}
+{% set host_count = groups.all|length %}
+{% set repo_count = repo_list.stdout_lines|length %}
+{% set result = result|round(0, 'floor')|int %}
+{% set remainder = repo_list.stdout_lines|length%groups.all|length %}
+{% set remainder = remainder|round(0, 'floor')|int %}
+{% if host_count > repo_count %}
+{% for h in groups.all %}
+{% if repo_count > 0 %}
+1
+{% set repo_count = repo_count-1 %}
+{% else %}
+0
+{% endif %}
+{% endfor %}
+{% elif remainder == 0 %}
+{% for h in groups.all %}
+{{ result }}
+{% endfor %}
+{% else %}
+{% for h in groups.all %}
+{% if remainder > 0 %}
+{{ result+1 }}
+{% set remainder = remainder-1 %}
+{% else %}
+{{ result }}
+{% endif %}
+{% endfor %}
+{% endif %}
