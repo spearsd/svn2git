@@ -1,2 +1,5 @@
 ---
 # vars file for svn2git
+
+local_working_dir: /tmp
+install_dir: /opt/svn2git

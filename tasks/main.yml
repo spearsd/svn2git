@@ -13,7 +13,7 @@
 
 - name: create directory
   file:
-    path: /opt/svn2git
+    path: "{{ install_dir }}"
     state: directory
     mode: 0755
   become: true

@@ -1,44 +1,56 @@
 ---
+- name: copy repo list template
+  template:
+    src: "repo_list.txt"
+    dest: "{{ local_working_dir }}/repo_list.txt"
+    mode: 0644
+  delegate_to: localhost
+  become: true
+  become_user: root
+
 - name: read repo list
-  command: cat /etc/ansible/roles/svn2git/templates/repo_list.txt
+  command: cat {{ local_working_dir }}/repo_list.txt
   delegate_to: localhost
   register: repo_list
+  become: true
+  become_user: root
 
 - name: copy params template
   template:
     src: "set_params.j2"
-    dest: "/etc/ansible/roles/svn2git/templates/set_params"
+    dest: "{{ local_working_dir }}/set_params"
     mode: 0644
   delegate_to: localhost
   become: true
   become_user: root
 
 - name: read parameters
-  command: cat /etc/ansible/roles/svn2git/templates/set_params
+  command: cat {{ local_working_dir }}/set_params
   delegate_to: localhost
   register: params
+  become: true
+  become_user: root
 
-- name: clear repo tmp file
+- name: clear repo tmp files
   file:
-    path: /etc/ansible/roles/svn2git/templates/repo_list_tmp.txt
+    path: "{{ local_working_dir }}/repo_list_tmp.txt"
     state: absent
   delegate_to: localhost
   become: true
   become_user: root
 
-- name: copy repo_list file
-  copy:
-    src: "/etc/ansible/roles/svn2git/templates/repo_list.txt"
-    dest: "/etc/ansible/roles/svn2git/templates/repo_list_tmp.txt"
-    mode: 0777
-    remote_src: true
+- name: create repo list temp file
+  template:
+    src: "repo_list.txt"
+    dest: "{{ local_working_dir }}/repo_list_tmp.txt"
+    mode: 0644
   delegate_to: localhost
   become: true
   become_user: root
 
 - name: clear each repo list file
   file:
-    path: /etc/ansible/roles/svn2git/templates/{{ inventory_hostname }}_repo_list.txt
+    path: "{{ local_working_dir }}/{{ inventory_hostname }}_repo_list.txt"
     state: absent
   delegate_to: localhost
   become: true
@@ -46,7 +58,7 @@
 
 - name: create each repo list file
   file:
-    path: /etc/ansible/roles/svn2git/templates/{{ inventory_hostname }}_repo_list.txt
+    path: "{{ local_working_dir }}/{{ inventory_hostname }}_repo_list.txt"
     state: touch
     mode: 0644
   delegate_to: localhost
@@ -55,45 +67,34 @@
 
 - name: copy top amount of repos and add to list
   shell: >
-    cat /etc/ansible/roles/svn2git/templates/repo_list_tmp.txt | 
+    cat {{ local_working_dir }}/repo_list_tmp.txt | 
     head -{{ params.stdout_lines[groups.all.index(inventory_hostname)] }} 
-    >> /etc/ansible/roles/svn2git/templates/{{ inventory_hostname }}_repo_list.txt && 
+    >> {{ local_working_dir }}/{{ inventory_hostname }}_repo_list.txt && 
     sed -i '1,{{ params.stdout_lines[groups.all.index(inventory_hostname)] }}d' 
-    /etc/ansible/roles/svn2git/templates/repo_list_tmp.txt
+    {{ local_working_dir }}/repo_list_tmp.txt
   args:
     executable: /bin/bash
   delegate_to: localhost
   become: true
   become_user: root
 
-- name: copy delegated repo templates
-  template:
-    src: "{{ inventory_hostname }}_repo_list.txt"
-    dest: "/opt/svn2git/repo_list"
+- name: copy delegated repo files
+  copy:
+    src: "{{ local_working_dir }}/{{ inventory_hostname }}_repo_list.txt"
+    dest: "{{ install_dir }}/repo_list"
     mode: 0644
   become: true
   become_user: root
 
-- name: clean up each repo list file
+- name: clean up working directory
   file:
-    path: /etc/ansible/roles/svn2git/templates/{{ inventory_hostname }}_repo_list.txt
+    path: "{{ local_working_dir }}/{{ item }}"
     state: absent
-  delegate_to: localhost
-  become: true
-  become_user: root
-
-- name: clean up repo tmp file
-  file:
-    path: /etc/ansible/roles/svn2git/templates/repo_list_tmp.txt
-    state: absent
-  delegate_to: localhost
-  become: true
-  become_user: root
-
-- name: clean up set_params file
-  file:
-    path: /etc/ansible/roles/svn2git/templates/set_params
-    state: absent
+  with_items:
+    - "{{ inventory_hostname }}_repo_list.txt"
+    - "repo_list_tmp.txt"
+    - "set_params"
+    - "repo_list.txt"
   delegate_to: localhost
   become: true
   become_user: root
