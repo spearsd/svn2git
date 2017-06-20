@@ -1,7 +1,7 @@
-Role Name
+Svn2Git
 =========
 
-A brief description of the role goes here.
+Scalable svn to git conversion tool.
 
 Requirements
 ------------

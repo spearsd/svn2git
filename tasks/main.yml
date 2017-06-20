@@ -21,3 +21,5 @@
 
 - name: include list creation
   include: create_lists.yml
+
+# lists are created and placed on servers
