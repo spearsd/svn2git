@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# Should we go ahead and call git svn clone here so we can loop over it? Each repo has to have everything else done to it so...
+#while read p; do
+#git svn clone --authors-file="" --stdlayout --prefix="origin/" http://url.to.svn -s directoryName
+
+# Navigate to the git svn cloned directory
+cd /opt/gitbeehive
+
+# Loop over all peg revisions and remove them. Git has no comparible feature. NOTE: Make sure these can be erased.
+for p in $(git for-each-ref --format='%(refname:short)' | grep @);
+do git branch -D -r $p;
+done
+
+# Loop over all branches beginning with tags. Tag them and remove the remote branches.
+for t in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/tags);
+do git tag ${t##o*/} && git branch -D -r $t;
+done
+
+# Loop over all remaining branches. Branch them and remove the remote branches.
+for b in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin);
+do git branch ${b##o*/} refs/remotes/$b && git branch -D -r $b;
+done
+
+# Remove the trunk branch. It is already now in git as the master branch.
+git branch -d trunk
+
+# Add the remote git repository as a remote. NOTE: We need to figure out how we will be authenticating with git here. SSH or user/pass over https?
+#git remote add origin https://url.to.repo.git
+
+# Probably have to go ahead and push the tags up. Git module for ansible is EXTREMELY limiting...
+#git push origin --tags
+
+# And if we should be all inclusive and just keep all git related functionality in this script, push all changes. Tags are NOT included during a push all.
+#git push origin --all
+
+#done < repo_list.txt
