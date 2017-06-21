@@ -19,7 +19,18 @@
   become: true
   become_user: root
 
+- name: create remote working directory
+  file:
+    path: "{{ remote_working_dir }}"
+    state: directory
+    mode: 0755
+  become: true
+  become_user: root
+  when: "inventory_hostname == groups.all[0]"
+
 - name: include list creation
   include: create_lists.yml
+  become: true
+  become_user: root
 
 # lists are created and placed on servers

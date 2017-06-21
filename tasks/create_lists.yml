@@ -1,100 +1,75 @@
 ---
-- name: copy repo list template
-  template:
-    src: "repo_list.txt"
-    dest: "{{ local_working_dir }}/repo_list.txt"
-    mode: 0644
-  delegate_to: localhost
-  become: true
-  become_user: root
+- block:
+  - name: copy repo list template
+    template:
+      src: "repo_list.txt"
+      dest: "{{ remote_working_dir }}/repo_list.txt"
+      mode: 0644
 
-- name: read repo list
-  command: cat {{ local_working_dir }}/repo_list.txt
-  delegate_to: localhost
-  register: repo_list
-  become: true
-  become_user: root
+  - name: read repo list
+    command: cat {{ remote_working_dir }}/repo_list.txt
+    register: repo_list
 
-- name: copy params template
-  template:
-    src: "set_params.j2"
-    dest: "{{ local_working_dir }}/set_params"
-    mode: 0644
-  delegate_to: localhost
-  become: true
-  become_user: root
+  - name: copy params template
+    template:
+      src: "set_params.j2"
+      dest: "{{ remote_working_dir }}/set_params"
+      mode: 0644
 
-- name: read parameters
-  command: cat {{ local_working_dir }}/set_params
-  delegate_to: localhost
-  register: params
-  become: true
-  become_user: root
+  - name: read parameters
+    command: cat {{ remote_working_dir }}/set_params
+    register: params
 
-- name: clear repo tmp files
-  file:
-    path: "{{ local_working_dir }}/repo_list_tmp.txt"
-    state: absent
-  delegate_to: localhost
-  become: true
-  become_user: root
+  - name: clear repo tmp files
+    file:
+      path: "{{ remote_working_dir }}/repo_list_tmp.txt"
+      state: absent
 
-- name: create repo list temp file
-  template:
-    src: "repo_list.txt"
-    dest: "{{ local_working_dir }}/repo_list_tmp.txt"
-    mode: 0644
-  delegate_to: localhost
-  become: true
-  become_user: root
+  - name: create repo list temp file
+    template:
+      src: "repo_list.txt"
+      dest: "{{ remote_working_dir }}/repo_list_tmp.txt"
+      mode: 0644
 
-- name: clear each repo list file
-  file:
-    path: "{{ local_working_dir }}/{{ inventory_hostname }}_repo_list.txt"
-    state: absent
-  delegate_to: localhost
-  become: true
-  become_user: root
+  - name: clear each repo list file
+    file:
+      path: "{{ remote_working_dir }}/{{ inventory_hostname }}_repo_list.txt"
+      state: absent
 
-- name: create each repo list file
-  file:
-    path: "{{ local_working_dir }}/{{ inventory_hostname }}_repo_list.txt"
-    state: touch
-    mode: 0644
-  delegate_to: localhost
-  become: true
-  become_user: root
+  - name: create each repo list file
+    file:
+      path: "{{ remote_working_dir }}/{{ inventory_hostname }}_repo_list.txt"
+      state: touch
+      mode: 0644
 
-- name: copy top amount of repos and add to list
-  shell: >
-    cat {{ local_working_dir }}/repo_list_tmp.txt | 
-    head -{{ params.stdout_lines[groups.all.index(inventory_hostname)] }} 
-    >> {{ local_working_dir }}/{{ inventory_hostname }}_repo_list.txt && 
-    sed -i '1,{{ params.stdout_lines[groups.all.index(inventory_hostname)] }}d' 
-    {{ local_working_dir }}/repo_list_tmp.txt
-  args:
-    executable: /bin/bash
-  delegate_to: localhost
-  become: true
-  become_user: root
+  - name: copy top amount of repos and add to list
+    shell: >
+      cat {{ remote_working_dir }}/repo_list_tmp.txt | 
+      head -{{ params.stdout_lines[groups.all.index(item)] }} 
+      > {{ remote_working_dir }}/{{ item }}_repo_list.txt && 
+      sed -i '1,{{ params.stdout_lines[groups.all.index(item)] }}d' 
+      {{ remote_working_dir }}/repo_list_tmp.txt
+    with_items:
+      - "{{ groups.all }}"
+    args:
+      executable: /bin/bash
 
-- name: copy delegated repo files
+  when: "inventory_hostname == groups.all[0]"
+
+- name: read contents of remote file
+  slurp:
+    src: "{{ remote_working_dir }}/{{ inventory_hostname }}_repo_list.txt"
+  delegate_to: "{{ groups.all[0] }}"
+  register: "result"
+
+- name: store content in repo list files
   copy:
-    src: "{{ local_working_dir }}/{{ inventory_hostname }}_repo_list.txt"
     dest: "{{ install_dir }}/repo_list"
+    content: "{{ result.content | b64decode }}"
     mode: 0644
-  become: true
-  become_user: root
 
 - name: clean up working directory
   file:
-    path: "{{ local_working_dir }}/{{ item }}"
+    path: "{{ remote_working_dir }}"
     state: absent
-  with_items:
-    - "{{ inventory_hostname }}_repo_list.txt"
-    - "repo_list_tmp.txt"
-    - "set_params"
-    - "repo_list.txt"
-  delegate_to: localhost
-  become: true
-  become_user: root
+  when: "inventory_hostname == groups.all[0]"
