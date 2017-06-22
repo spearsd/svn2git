@@ -1,0 +1,224 @@
+#!/bin/bash
+LOG_FILE={{ install_dir }}/logs/log_file
+GIT_REPO_DIR={{ git_repo_url }}
+INSTALL_DIR={{ install_dir }}
+SVN_USERNAME={{ svn_username }}
+SVN_PASSWORD={{ svn_password }}
+GIT_USERNAME={{ git_username }}
+GIT_PASSWORD={{ git_password }}
+EMAIL_ADDRESS={{ email_address }}
+TOTAL_REPOS=0
+SUCCESSFUL_REPOS=0
+FAILED_REPOS=0
+declare -a TABLE_ARRAY
+
+# Should we go ahead and call git svn clone here so we can loop over it? Each repo has to have everything else done to it so...
+while IFS= read -r p
+do
+	# count repos
+	expr $TOTAL_REPOS + 1
+
+	# return to working directory
+	cd $INSTALL_DIR/repos
+
+	# read svn repo name for repo_list
+	repo_name=$(echo "$p" | rev | cut -d '/' -f 1 | rev)
+
+	# clone the svn repo
+	# for cloning with credentials try:
+	# echo $SVN_PASSWORD | git svn clone --username $SVN_USERNAME --authors-file="" --stdlayout --prefix="origin/" $p -s $repo_name >> $LOG_FILE 2>&1
+	git svn clone --authors-file="" --stdlayout --prefix="origin/" $p -s $repo_name >> $LOG_FILE_$repo_name 2>&1
+
+# Navigate to the git svn cloned directory
+	cd $INSTALL_DIR/repos/$repo_name
+
+# Loop over all peg revisions and remove them. Git has no comparible feature. NOTE: Make sure these can be erased.
+	for r in $(git for-each-ref --format='%(refname:short)' | grep @);
+	do 
+		git branch -D -r $r; >> $LOG_FILE_$repo_name 2>&1
+	done
+
+# Loop over all branches beginning with tags. Tag them and remove the remote branches.
+	for t in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/tags);
+	do 
+		git tag ${t##o*/} && git branch -D -r $t; >> $LOG_FILE_$repo_name 2>&1
+	done
+
+# Loop over all remaining branches. Branch them and remove the remote branches.
+	for b in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin);
+	do 
+		git branch ${b##o*/} refs/remotes/$b && git branch -D -r $b; >> $LOG_FILE_$repo_name 2>&1
+	done
+
+# Remove the trunk branch. It is already now in git as the master branch.
+	git branch -d trunk >> $LOG_FILE_$repo_name 2>&1
+
+# Add the remote git repository as a remote. NOTE: We need to figure out how we will be authenticating with git here. SSH or user/pass over https?
+	git remote add origin https://$GIT_REPO_DIR/$repo_name.git >> $LOG_FILE_$repo_name 2>&1
+
+# create repo within project in bitbucket.
+# to create a project: json needs name, key, description.
+# should the username password be the same for Git?
+#	curl -D- -u user:password -X POST -d @/path/to/test.json -H "Content-Type: application/json" http://url.to.bitbucket/rest/api/1.0/projects/
+# to create repo: json needs name, has_wiki, is_private, and project with sub-info key.
+#	curl -D- -u user:password -X POST -d @/path/to/test.json -H "Content-Type: application/json" http://url.to.bitbucket/rest/api/1.0/projects/PROJECT_KEY/repos
+
+#################################################
+# to use credentials on git pushes use:
+# git push https://$GIT_USERNAME:$GIT_PASSWORD@$GIT_REPO_DIR/$repo_name.git --tags  >> $LOG_FILE 2>&1
+# Probably have to go ahead and push the tags up. Git module for ansible is EXTREMELY limiting...
+	git push origin --tags >> $LOG_FILE_$repo_name 2>&1
+
+# And if we should be all inclusive and just keep all git related functionality in this script, push all changes. Tags are NOT included during a push all.
+	git push origin --all >> $LOG_FILE_$repo_name 2>&1
+
+#################################################
+# process log files and look for errors and set the failed boolean
+# then add the results to to table for email notification
+	failed=false
+	errors=""
+	log_result=$(cat $LOG_FILE_$repo_name | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-3)
+	if [ -z "$log_result" ]; then
+		$failed=false
+		$errors="None"
+		expr $SUCCESSFUL_REPOS + 1
+	else
+		$failed=true
+		$errors=$log_result
+		expr $FAILED_REPOS + 1
+	fi
+
+	read -r -d '' table_entry <<- EOM
+	<tr>
+	if [ $(($TOTAL_REPOS%2)) -eq 0 ]; then
+		if [ $failed ]; then 
+    		<td class="tg-number">$TOTAL_REPOS</td>
+    		<td class="tg-name_bg">$repo_name</td>
+    		<td class="tg-failed">Errors</td>
+    		<td class="tg-name_bg">$errors...</td>
+    	else
+    		<td class="tg-number">$TOTAL_REPOS</td>
+    		<td class="tg-name_bg">$repo_name</td>
+    		<td class="tg-success">Success</td>
+    		<td class="tg-name_bg">$errors</td>
+    	fi
+    else
+    	if [ $failed ]; then 
+    		<td class="tg-number_alt">$TOTAL_REPOS</td>
+    		<td class="">$repo_name</td>
+    		<td class="tg-failed_alt">Errors</td>
+    		<td class="">$errors...</td>
+    	else
+    		<td class="tg-number_alt">$TOTAL_REPOS</td>
+    		<td class="">$repo_name</td>
+    		<td class="tg-success_alt">Success</td>
+    		<td class="">$errors</td>
+    	fi
+    fi
+  	</tr>
+	EOM
+
+	# add result to table array
+	TABLE_ARRAY+=$table_entry
+
+	# finally, add repo results to main log file
+	echo "-----------------------------------------------------" >> $LOG_FILE
+	echo "$repo_name" >> $LOG_FILE
+	echo "-----------------------------------------------------" >> $LOG_FILE
+	echo "$LOG_FILE_$repo_name" >> $LOG_FILE
+
+done < $INSTALL_DIR/repo_list.txt
+
+#################################################################################
+# From here, once all repos are finished on this host send 						#
+# notification email that this host is finished with n failed/successful repos.	#
+#################################################################################
+
+ip=$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')
+if [[ $ip =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+	host_ip=$ip
+else
+	host_ip="Could not resolve host IP."
+fi
+
+read -r -d '' body << EOM
+<h3> Repository SVN to Git Conversion Results</h3>
+<b>Host:</b>   					$host_ip<br/>
+<b>Total Repos:</b> 			$TOTAL_REPOS<br/>
+<b>Successful Conversions:</b>	<font color="#32cb00">$SUCCESSFUL_REPOS</font><br/>
+<b>Failed Conversions:</b>     	<font color="#fe0000">$FAILED_REPOS</font><br/>
+<br/<br/>
+<style type="text/css">
+.tg  {border-collapse:collapse;border-spacing:0;border-color:#aaa;}
+.tg td{font-family:Arial, sans-serif;font-size:14px;padding:6px 11px;border-style:solid;border-width:0px;overflow:hidden;word-break:normal;border-color:#aaa;color:#333;background-color:#fff;border-top-width:1px;border-bottom-width:1px;}
+.tg th{font-family:Arial, sans-serif;font-size:14px;font-weight:bold;padding:6px 11px;border-style:solid;border-width:0px;overflow:hidden;word-break:normal;border-color:#aaa;color:#fff;background-color:#f38630;border-top-width:1px;border-bottom-width:1px;}
+.tg .tg-name_bg{background-color:#ecf4ff}
+.tg .tg-success_alt{color:#32cb00}
+.tg .tg-number{background-color:#ecf4ff;font-weight:bold}
+.tg .tg-failed{background-color:#ecf4ff;color:#fe0000;vertical-align:top}
+.tg .tg-failed_alt{color:#fe0000}
+.tg .tg-success{background-color:#ecf4ff;color:#32cb00}
+.tg .tg-number_alt{font-weight:bold}
+.tg .tg-header{background-color:#3166ff;vertical-align:top}
+</style>
+<table class="tg">
+  <tr>
+    <th class="tg-header">#</th>
+    <th class="tg-header">Repository</th>
+    <th class="tg-header">Status</th>
+    <th class="tg-header">Error Msg</th>
+  </tr>
+  for r in "${TABLE_ARRAY[@]}"
+  do
+	$r
+  done
+</table>
+EOM
+
+from="svn2git@cgi.com"
+to="$EMAIL_ADDRESS"
+subject="Status Update"
+boundary="ZZ_/afg6432dfgkl.94531q"
+declare -a attachments
+# to add more attached files: ( "file1" "file2" "file3" )
+attachments=( "$LOG_FILE" )
+
+# Build headers
+{
+
+printf '%s\n' "From: $from
+To: $to
+Subject: $subject
+Mime-Version: 1.0
+Content-Type: multipart/mixed; boundary=\"$boundary\"
+
+--${boundary}
+Content-Type: text/html; charset=\"US-ASCII\"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+$body
+"
+ 
+# now loop over the attachments, guess the type
+# and produce the corresponding part, encoded base64
+for file in "${attachments[@]}"; do
+
+  [ ! -f "$file" ] && echo "Warning: attachment $file not found, skipping" >&2 && continue
+
+  mimetype=$(get_mimetype "$file") 
+ 
+  printf '%s\n' "--${boundary}
+Content-Type: $mimetype
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename=\"$file\"
+"
+ 
+  base64 "$file"
+  echo
+done
+ 
+# print last boundary with closing --
+printf '%s\n' "--${boundary}--"
+ 
+} | sendmail -t -oi   # one may also use -f here to set the envelope-from

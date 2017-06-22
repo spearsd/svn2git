@@ -11,11 +11,15 @@
   become: true
   become_user: root
 
-- name: create directory
+- name: create directories
   file:
-    path: "{{ install_dir }}"
+    path: "{{ item }}"
     state: directory
     mode: 0755
+  with_items:
+    - "{{ install_dir }}"
+    - "{{ install_dir }}/repos"
+    - "{{ install_dir }}/logs"
   become: true
   become_user: root
 
@@ -33,4 +37,15 @@
   become: true
   become_user: root
 
-# lists are created and placed on servers
+- name: copy bash script
+  template:
+    src: "gitMigration.sh.j2"
+    dest: "{{ install_dir }}/repos/gitMigration.sh"
+    mode: 0755
+  become: true
+  become_user: root
+
+- name: execute bash scripts
+  shell: nohup ./gitMigration.sh & 
+  args:
+    chdir: "{{ install_dir }}/repos"
