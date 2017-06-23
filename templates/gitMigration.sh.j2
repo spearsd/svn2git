@@ -73,7 +73,6 @@ do
 		$errors="None"
 		curl --data "token=$TOKEN&status=success&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL
 	else
-		$failed=true
 		$errors=$log_result
 		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL
 	fi
