@@ -71,10 +71,10 @@ do
 	log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
 	if [ -z "$log_result" ]; then
 		$errors="None"
-		curl --data "token=$TOKEN&status=success&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL
+		curl --data "token=$TOKEN&status=success&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
 	else
 		$errors=$log_result
-		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL
+		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
 	fi
 
 	# finally, add repo results to main log file
