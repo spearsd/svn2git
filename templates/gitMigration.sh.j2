@@ -1,23 +1,18 @@
 #!/bin/bash
-LOG_DIRECTORY={{ install_dir }}/logs
-GIT_REPO_DIR={{ git_repo_url }}
+WEBPAGE_URL='http://{{ groups.all[0] }}'
+IP_ADDRESS='{{ inventory_hostname }}'
+TOKEN={{ token }}
 INSTALL_DIR={{ install_dir }}
+LOG_DIRECTORY={{ install_dir }}/logs
+GIT_REPO_DIR='{{ git_repo_url }}'
 SVN_USERNAME={{ svn_username }}
 SVN_PASSWORD={{ svn_password }}
 GIT_USERNAME={{ git_username }}
 GIT_PASSWORD={{ git_password }}
-EMAIL_ADDRESS={{ email_address }}
-TOTAL_REPOS=0
-SUCCESSFUL_REPOS=0
-FAILED_REPOS=0
-declare -a TABLE_ARRAY
 
 # Should we go ahead and call git svn clone here so we can loop over it? Each repo has to have everything else done to it so...
 while IFS= read -r p
 do
-	# count repos
-	expr $TOTAL_REPOS + 1
-
 	# return to working directory
 	cd $INSTALL_DIR/repos
 
@@ -72,60 +67,22 @@ do
 # And if we should be all inclusive and just keep all git related functionality in this script, push all changes. Tags are NOT included during a push all.
 	git push origin --all >> $LOG_DIRECTORY/$repo_name.log 2>&1
 
-#################################################
-# process log files and look for errors and set the failed boolean
-# then add the results to to table for email notification
-	failed=false
 	errors=""
-	log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-3)
+	log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
 	if [ -z "$log_result" ]; then
-		$failed=false
 		$errors="None"
-		expr $SUCCESSFUL_REPOS + 1
+		curl --data "token=$TOKEN&status=success&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL
 	else
 		$failed=true
 		$errors=$log_result
-		expr $FAILED_REPOS + 1
+		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL
 	fi
 
-	read -r -d '' table_entry <<- EOM
-	<tr>
-	if [ $(($TOTAL_REPOS%2)) -eq 0 ]; then
-		if [ $failed ]; then 
-    		<td class="tg-number">$TOTAL_REPOS</td>
-    		<td class="tg-name_bg">$repo_name</td>
-    		<td class="tg-failed">Errors</td>
-    		<td class="tg-name_bg">$errors...</td>
-    	else
-    		<td class="tg-number">$TOTAL_REPOS</td>
-    		<td class="tg-name_bg">$repo_name</td>
-    		<td class="tg-success">Success</td>
-    		<td class="tg-name_bg">$errors</td>
-    	fi
-    else
-    	if [ $failed ]; then 
-    		<td class="tg-number_alt">$TOTAL_REPOS</td>
-    		<td class="">$repo_name</td>
-    		<td class="tg-failed_alt">Errors</td>
-    		<td class="">$errors...</td>
-    	else
-    		<td class="tg-number_alt">$TOTAL_REPOS</td>
-    		<td class="">$repo_name</td>
-    		<td class="tg-success_alt">Success</td>
-    		<td class="">$errors</td>
-    	fi
-    fi
-  	</tr>
-	EOM
-
-	# add result to table array
-	TABLE_ARRAY+=$table_entry
-
 	# finally, add repo results to main log file
-	echo "-----------------------------------------------------" >> $LOG_DIRECTORY
-	echo "$repo_name" >> $LOG_DIRECTORY
-	echo "-----------------------------------------------------" >> $LOG_DIRECTORY
-	echo "$LOG_DIRECTORY/$repo_name.log" >> $LOG_DIRECTORY
+	echo "-----------------------------------------------------" >> $LOG_DIRECTORY/main_log.log
+	echo "$repo_name" >> $LOG_DIRECTORY/main_log.log
+	echo "-----------------------------------------------------" >> $LOG_DIRECTORY/main_log.log
+	echo "$LOG_DIRECTORY/$repo_name.log" >> $LOG_DIRECTORY/main_log.log
 
 done < $INSTALL_DIR/repo_list.txt
 
