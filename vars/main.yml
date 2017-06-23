@@ -10,3 +10,6 @@ svn_password: svnpassword
 git_username: gituser
 git_password: gitpassword
 git_repo_url: url.to.git
+
+set_up_webpage: true
+token: "LYRTjFUn657w3xK4F2soyWdM4gQ6BWpaJ2Mzpg0L"

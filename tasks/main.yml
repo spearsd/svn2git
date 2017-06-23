@@ -30,12 +30,75 @@
     mode: 0755
   become: true
   become_user: root
-  when: "inventory_hostname == groups.all[0]"
+  when: "inventory_hostname == groups.all[0]" 
 
 - name: include list creation
   include: create_lists.yml
   become: true
   become_user: root
+
+# this block creates the webpage for displaying conversion status
+########################
+- block:
+  - name: set total_repos variable
+    set_fact:
+      total_repos: "{{ repo_list.stdout_lines|length }}"
+
+  - name: install apache and php
+    package:
+      name: "{{ item }}"
+      state: present
+    with_items:
+      - "php"
+      - "httpd"
+
+  - name: start apache
+    service:
+      name: httpd
+      state: started
+      enabled: yes
+  
+  - name: create count files
+    command: "echo '0' > {{ item }}" 
+    args:
+      chdir: /var/www/html
+    with_items:
+      - "countlog.txt"
+      - "success_countlog.txt"
+      - "failed_countlog.txt"
+
+  - name: change permissions of count files
+    file:
+      path: "/var/www/html/{{ item }}"
+      state: touch
+      mode: 0764
+      owner: apache
+      group: apache
+    with_items:
+      - "countlog.txt"
+      - "success_countlog.txt"
+      - "failed_countlog.txt"
+
+  - name: copy webpage templates
+    template:
+      src: "{{ item.src }}"
+      dest: "/var/www/html/{{ item.dest }}"
+      mode: 0764
+      owner: apache
+      group: apache
+    with_items:
+      - { src: "index.php.j2", dest: "index.php" }
+      - { src: "table.html.j2", dest: "table.html" }
+
+  - name: restart apache
+    service:
+      name: httpd
+      state: restarted
+      enabled: yes
+  become: true
+  become_user: root
+  when: inventory_hostname == "groups.all[0]" and set_up_webpage == "true"
+###############################
 
 - name: copy bash script
   template:
@@ -46,6 +109,6 @@
   become_user: root
 
 - name: execute bash scripts
-  shell: nohup ./gitMigration.sh & 
+  shell: nohup ./gitMigration.sh &
   args:
     chdir: "{{ install_dir }}/repos"

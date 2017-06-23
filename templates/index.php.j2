@@ -1,0 +1,135 @@
+<?php
+
+$total_repos = {{ total_repos }};
+$ip_address = "{{ inventory_hostname }}";
+$token = "{{ token }}";
+$current_repos = 0;
+$successful_repos = 0;
+$failed_repos = 0;
+$error = "";
+
+//opens files to read the numbers
+$repo_count_file = fopen("countlog.txt","r");
+$current_repos = fgets($repo_count_file,1000);
+fclose($repo_count_file);
+$success_count_file = fopen("success_countlog.txt","r");
+$successful_repos = fgets($success_count_file,1000);
+fclose($success_count_file);
+$failed_count_file = fopen("failed_countlog.txt","r");
+$failed_repos = fgets($failed_count_file,1000);
+fclose($failed_count_file);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST'){
+	if (htmlspecialchars($_POST["token"]) === "$token"){
+		if (htmlspecialchars($_POST["status"]) === "success"){
+			//update numbers
+			$host_ip=$_POST["ip_address"];
+			$repo_name=$_POST["repo_name"];
+			$error="None";
+			$current_repos=$current_repos + 1 ;
+			$successful_repos=$successful_repos + 1 ;
+			//write to files
+			$repo_count_file = fopen("countlog.txt","w");
+			fwrite($repo_count_file, $current_repos);
+			fclose($repo_count_file);
+			$success_count_file = fopen("success_countlog.txt","w");
+			fwrite($success_count_file, $successful_repos);
+			fclose($success_count_file);
+			//add row to table
+			// for successes
+// deletes </table> from table.html
+			$lines = file('table.html'); 
+			$last = sizeof($lines) - 1 ; 
+			unset($lines[$last]);
+			file_put_contents('table.html', implode(PHP_EOL, $lines));
+			if ($current_repos % 2 == 0) {
+			$table_row = <<<EOT
+	<tr>
+		<td class="tg-number">$current_repos</td>
+    	<td class="tg-name_bg">$repo_name</td>
+    	<td class="tg-success">Success</td>
+    	<td class="tg-name_bg">$error</td>
+		<td class="tg-name_bg">$host_ip</td>
+	</tr>
+</table>
+EOT;
+			}
+			else{
+			$table_row = <<<EOT
+	<tr>
+		<td class="tg-number_alt">$current_repos</td>
+    	<td class="">$repo_name</td>
+    	<td class="tg-success_alt">Success</td>
+    	<td class="">$error</td>
+		<td class="">$host_ip</td>
+	</tr>
+</table>
+EOT;
+			}
+			file_put_contents('table.html', $table_row.PHP_EOL , FILE_APPEND);
+		}
+		if (htmlspecialchars($_POST["status"]) === "failed"){
+			$host_ip=$_POST["ip_address"];
+			$repo_name=$_POST["repo_name"];
+			$error=$_POST["error_msg"];
+			$current_repos=$current_repos + 1;
+			$failed_repos=$failed_repos + 1;
+			//write to files
+			$repo_count_file = fopen("countlog.txt","w");
+			fwrite($repo_count_file, $current_repos);
+			fclose($repo_count_file);
+			$failed_count_file = fopen("failed_countlog.txt","w");
+			fwrite($failed_count_file, $failed_repos);
+			fclose($failed_count_file);
+			//add row to table
+			// for fails
+// deletes </table> from table.html
+			$lines = file('table.html'); 
+			$last = sizeof($lines) - 1 ; 
+			unset($lines[$last]);
+			file_put_contents('table.html', implode(PHP_EOL, $lines));
+			if ($current_repos % 2 == 0) {
+			$table_row = <<<EOT
+	<tr>
+		<td class="tg-number">$current_repos</td>
+		<td class="tg-name_bg">$repo_name</td>
+		<td class="tg-failed">Errors</td>
+		<td class="tg-name_bg">$error...</td>
+		<td class="tg-name_bg">$host_ip</td>
+	</tr>
+</table>
+EOT;
+			}
+			else{
+			$table_row = <<<EOT
+	<tr>
+		<td class="tg-number_alt">$current_repos</td>
+		<td class="">$repo_name</td>
+		<td class="tg-failed_alt">Errors</td>
+		<td class="">$error...</td>
+		<td class="">$host_ip</td>
+	</tr>
+</table>
+EOT;
+			}
+			file_put_contents('table.html', $table_row.PHP_EOL , FILE_APPEND);
+		}
+	}
+}
+?>
+
+<html>
+    <head>
+    <meta http-equiv="refresh" content="5;URL='http://<?php echo $ip_address; ?>'">
+    </head>
+	<body>
+	<h1>SVN to Git Conversion Results</h1>
+	<p>
+		Repositories: <?php echo $current_repos; ?>/<?php echo $total_repos; ?><br/>
+		Successful Conversions: <b><font color="green"><?php echo $successful_repos; ?></font></b><br/>
+		Failed Conversions: <b><font color="red"><?php echo $failed_repos; ?></font></b><br/>
+	</p>
+	<br/><br/><br/><hr><br/><br/><br/>
+	<?php include('table.html'); ?>
+	</body>
+</html>
