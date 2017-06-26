@@ -13,6 +13,8 @@ GIT_PASSWORD={{ git_password }}
 # Should we go ahead and call git svn clone here so we can loop over it? Each repo has to have everything else done to it so...
 while IFS= read -r p
 do
+	# clear errors variable
+	errors="None"
 	# return to working directory
 	cd $INSTALL_DIR/repos
 
@@ -23,34 +25,87 @@ do
 	# for cloning with credentials try:
 	# echo $SVN_PASSWORD | git svn clone --username $SVN_USERNAME --authors-file="" --stdlayout --prefix="origin/" $p -s $repo_name >> $LOG_DIRECTORY 2>&1
 	git svn clone --authors-file="" --stdlayout --prefix="origin/" $p -s $repo_name >> $LOG_DIRECTORY/$repo_name.log 2>&1
+	log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+	if [ -z "$log_result" ]; then
+		$errors="None"
+	else
+		$errors=$log_result
+		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+	fi
 
-# Navigate to the git svn cloned directory
-	cd $INSTALL_DIR/repos/$repo_name
+	# Navigate to the git svn cloned directory
+	if [ -z "$errors" -ne "$log_result" ]; then
+		cd $INSTALL_DIR/repos/$repo_name
+	fi
 
 # Loop over all peg revisions and remove them. Git has no comparible feature. NOTE: Make sure these can be erased.
-	for r in $(git for-each-ref --format='%(refname:short)' | grep @);
-	do 
-		git branch -D -r $r; >> $LOG_DIRECTORY/$repo_name.log 2>&1
-	done
+	if [ -z "$errors" -ne "$log_result" ]; then
+		for r in $(git for-each-ref --format='%(refname:short)' | grep @);
+		do 
+			git branch -D -r $r; >> $LOG_DIRECTORY/$repo_name.log 2>&1
+		done
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		if [ -z "$log_result" ]; then
+			$errors="None"
+		else
+			$errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+		fi
+	fi
 
 # Loop over all branches beginning with tags. Tag them and remove the remote branches.
-	for t in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/tags);
-	do 
-		git tag ${t##o*/} && git branch -D -r $t; >> $LOG_DIRECTORY/$repo_name.log 2>&1
-	done
+	if [ -z "$errors" -ne "$log_result" ]; then
+		for t in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/tags);
+		do 
+			git tag ${t##o*/} && git branch -D -r $t; >> $LOG_DIRECTORY/$repo_name.log 2>&1
+		done
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		if [ -z "$log_result" ]; then
+			$errors="None"
+		else
+			$errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+		fi
+	fi
 
 # Loop over all remaining branches. Branch them and remove the remote branches.
-	for b in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin);
-	do 
-		git branch ${b##o*/} refs/remotes/$b && git branch -D -r $b; >> $LOG_DIRECTORY/$repo_name.log 2>&1
-	done
+	if [ -z "$errors" -ne "$log_result" ]; then
+		for b in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin);
+		do 
+			git branch ${b##o*/} refs/remotes/$b && git branch -D -r $b; >> $LOG_DIRECTORY/$repo_name.log 2>&1
+		done
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		if [ -z "$log_result" ]; then
+			$errors="None"
+		else
+			$errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+		fi
+	fi
 
 # Remove the trunk branch. It is already now in git as the master branch.
-	git branch -d trunk >> $LOG_DIRECTORY/$repo_name.log 2>&1
+	if [ -z "$errors" -ne "$log_result" ]; then
+		git branch -d trunk >> $LOG_DIRECTORY/$repo_name.log 2>&1
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		if [ -z "$log_result" ]; then
+			$errors="None"
+		else
+			$errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+		fi
+	fi
 
 # Add the remote git repository as a remote. NOTE: We need to figure out how we will be authenticating with git here. SSH or user/pass over https?
-	git remote add origin https://$GIT_REPO_DIR/$repo_name.git >> $LOG_DIRECTORY/$repo_name.log 2>&1
-
+	if [ -z "$errors" -ne "$log_result" ]; then
+		git remote add origin https://$GIT_REPO_DIR/$repo_name.git >> $LOG_DIRECTORY/$repo_name.log 2>&1
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		if [ -z "$log_result" ]; then
+			$errors="None"
+		else
+			$errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+		fi
+	fi
 # create repo within project in bitbucket.
 # to create a project: json needs name, key, description.
 # should the username password be the same for Git?
@@ -62,20 +117,31 @@ do
 # to use credentials on git pushes use:
 # git push https://$GIT_USERNAME:$GIT_PASSWORD@$GIT_REPO_DIR/$repo_name.git --tags  >> $LOG_DIRECTORY 2>&1
 # Probably have to go ahead and push the tags up. Git module for ansible is EXTREMELY limiting...
-	git push origin --tags >> $LOG_DIRECTORY/$repo_name.log 2>&1
+	if [ -z "$errors" -ne "$log_result" ]; then
+		git push origin --tags >> $LOG_DIRECTORY/$repo_name.log 2>&1
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		if [ -z "$log_result" ]; then
+			$errors="None"
+		else
+			$errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+		fi
+	fi
 
 # And if we should be all inclusive and just keep all git related functionality in this script, push all changes. Tags are NOT included during a push all.
-	git push origin --all >> $LOG_DIRECTORY/$repo_name.log 2>&1
-
-	errors=""
-	log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
-	if [ -z "$log_result" ]; then
-		$errors="None"
-		curl --data "token=$TOKEN&status=success&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
-	else
-		$errors=$log_result
-		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+	if [ -z "$errors" -ne "$log_result" ]; then
+		git push origin --all >> $LOG_DIRECTORY/$repo_name.log 2>&1
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		if [ -z "$log_result" ]; then
+			$errors="None"
+			curl --data "token=$TOKEN&status=success&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+		else
+			$errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+		fi
 	fi
+
+	
 
 	# finally, add repo results to main log file
 	echo "-----------------------------------------------------" >> $LOG_DIRECTORY/main_log.log
