@@ -94,10 +94,24 @@ do
 			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
 		fi
 	fi
+	
+# Create the Bitbucket project for repositories to be created in. NOTE: If we create a project for all converted repos to live in, move this outside while loop.
+# To create a project: json needs name, key, description.
+	#if [ -z "$errors" -ne "$log_result" ]; then
+		#curl -u $GIT_USERNAME:$GIT_PASSWORD -X POST -d '{ "name": "$project_name", "key": "$project_key" }' -H "Content-Type: application/json" $GIT_REPO_DIR/rest/api/1.0/projects/
+		#log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		#if [ -z "$log_result" ]; then
+			#$errors="None"
+		#else
+			#$errors=$log_result
+			#curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+		#fi
+	#fi
 
-# Add the remote git repository as a remote. NOTE: We need to figure out how we will be authenticating with git here. SSH or user/pass over https?
+# Create the Bitbucket repository to push converted svn repo to.
+# To create repo: json needs name, has_wiki, is_private, and project with sub-info key.
 	if [ -z "$errors" -ne "$log_result" ]; then
-		git remote add origin https://$GIT_REPO_DIR/$repo_name.git >> $LOG_DIRECTORY/$repo_name.log 2>&1
+		curl -u $GIT_USERNAME:$GIT_PASSWORD -X POST -d '{ "name": "$repo_name", "has_wiki": false, "is_private": true, "project": {"key": "$project_key"} }' -H "Content-Type: application/json" $GIT_REPO_DIR/rest/api/1.0/projects/PROJECT_KEY/repos >> $LOG_DIRECTORY/$repo_name.log 2>&1
 		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
 		if [ -z "$log_result" ]; then
 			$errors="None"
@@ -106,12 +120,18 @@ do
 			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
 		fi
 	fi
-# create repo within project in bitbucket.
-# to create a project: json needs name, key, description.
-# should the username password be the same for Git?
-#	curl -D- -u user:password -X POST -d @/path/to/test.json -H "Content-Type: application/json" http://url.to.bitbucket/rest/api/1.0/projects/
-# to create repo: json needs name, has_wiki, is_private, and project with sub-info key.
-#	curl -D- -u user:password -X POST -d @/path/to/test.json -H "Content-Type: application/json" http://url.to.bitbucket/rest/api/1.0/projects/PROJECT_KEY/repos
+
+# Add the remote git repository as a remote. NOTE: We need to figure out how we will be authenticating with git here. SSH or user/pass over https?
+	if [ -z "$errors" -ne "$log_result" ]; then
+		git remote add origin https://$GIT_REPO_DIR/scm/$project_key/$repo_name.git >> $LOG_DIRECTORY/$repo_name.log 2>&1
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		if [ -z "$log_result" ]; then
+			$errors="None"
+		else
+			$errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+		fi
+	fi
 
 #################################################
 # to use credentials on git pushes use:
@@ -141,6 +161,7 @@ do
 		fi
 	fi
 
+# If the push was a success, should we clean up the git repository since it now lives in Bitbucket and is not needed locally?
 	
 
 	# finally, add repo results to main log file
@@ -150,97 +171,3 @@ do
 	echo "$LOG_DIRECTORY/$repo_name.log" >> $LOG_DIRECTORY/main_log.log
 
 done < $INSTALL_DIR/repo_list.txt
-
-#################################################################################
-# From here, once all repos are finished on this host send 						#
-# notification email that this host is finished with n failed/successful repos.	#
-#################################################################################
-
-# ip=$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')
-# if [[ $ip =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-	# host_ip=$ip
-# else
-	# host_ip="Could not resolve host IP."
-# fi
-
-# read -r -d '' body << EOM
-# <h3> Repository SVN to Git Conversion Results</h3>
-# <b>Host:</b>   					$host_ip<br/>
-# <b>Total Repos:</b> 			$TOTAL_REPOS<br/>
-# <b>Successful Conversions:</b>	<font color="#32cb00">$SUCCESSFUL_REPOS</font><br/>
-# <b>Failed Conversions:</b>     	<font color="#fe0000">$FAILED_REPOS</font><br/>
-# <br/<br/>
-# <style type="text/css">
-# .tg  {border-collapse:collapse;border-spacing:0;border-color:#aaa;}
-# .tg td{font-family:Arial, sans-serif;font-size:14px;padding:6px 11px;border-style:solid;border-width:0px;overflow:hidden;word-break:normal;border-color:#aaa;color:#333;background-color:#fff;border-top-width:1px;border-bottom-width:1px;}
-# .tg th{font-family:Arial, sans-serif;font-size:14px;font-weight:bold;padding:6px 11px;border-style:solid;border-width:0px;overflow:hidden;word-break:normal;border-color:#aaa;color:#fff;background-color:#f38630;border-top-width:1px;border-bottom-width:1px;}
-# .tg .tg-name_bg{background-color:#ecf4ff}
-# .tg .tg-success_alt{color:#32cb00}
-# .tg .tg-number{background-color:#ecf4ff;font-weight:bold}
-# .tg .tg-failed{background-color:#ecf4ff;color:#fe0000;vertical-align:top}
-# .tg .tg-failed_alt{color:#fe0000}
-# .tg .tg-success{background-color:#ecf4ff;color:#32cb00}
-# .tg .tg-number_alt{font-weight:bold}
-# .tg .tg-header{background-color:#3166ff;vertical-align:top}
-# </style>
-# <table class="tg">
-  # <tr>
-    # <th class="tg-header">#</th>
-    # <th class="tg-header">Repository</th>
-    # <th class="tg-header">Status</th>
-    # <th class="tg-header">Error Msg</th>
-  # </tr>
-  # for r in "${TABLE_ARRAY[@]}"
-  # do
-	# $r
-  # done
-# </table>
-# EOM
-
-# from="svn2git@cgi.com"
-# to="$EMAIL_ADDRESS"
-# subject="Status Update"
-# boundary="ZZ_/afg6432dfgkl.94531q"
-# declare -a attachments
-# # to add more attached files: ( "file1" "file2" "file3" )
-# attachments=( "$LOG_DIRECTORY" )
-
-# # Build headers
-# {
-
-# printf '%s\n' "From: $from
-# To: $to
-# Subject: $subject
-# Mime-Version: 1.0
-# Content-Type: multipart/mixed; boundary=\"$boundary\"
-
-# --${boundary}
-# Content-Type: text/html; charset=\"US-ASCII\"
-# Content-Transfer-Encoding: 7bit
-# Content-Disposition: inline
-
-# $body
-# "
- 
-# # now loop over the attachments, guess the type
-# # and produce the corresponding part, encoded base64
-# for file in "${attachments[@]}"; do
-
-  # [ ! -f "$file" ] && echo "Warning: attachment $file not found, skipping" >&2 && continue
-
-  # mimetype=$(get_mimetype "$file") 
- 
-  # printf '%s\n' "--${boundary}
-# Content-Type: $mimetype
-# Content-Transfer-Encoding: base64
-# Content-Disposition: attachment; filename=\"$file\"
-# "
- 
-  # base64 "$file"
-  # echo
-# done
- 
-# # print last boundary with closing --
-# printf '%s\n' "--${boundary}--"
- 
-# } | sendmail -t -oi   # one may also use -f here to set the envelope-from
