@@ -127,7 +127,7 @@ do
 
 # Add the remote git repository as a remote. NOTE: We need to figure out how we will be authenticating with git here. SSH or user/pass over https?
 	if [ "$errors" != "$log_result" ]; then
-		git remote add origin http://$GIT_REPO_DIR/scm/$PROJECT_KEY/$reponame.git >> $LOG_DIRECTORY/$reponame.log 2>&1
+		git remote add origin http://$GIT_USERNAME:$GIT_PASSWORD@$GIT_REPO_DIR/scm/$PROJECT_KEY/$reponame.git >> $LOG_DIRECTORY/$reponame.log 2>&1
 		log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad" | cut -c-50)
 		if [ -z "$log_result" ]; then
 			errors='None'
@@ -139,7 +139,7 @@ do
 
 #################################################
 # to use credentials on git pushes use:
-# git push https://$GIT_USERNAME:$GIT_PASSWORD@$GIT_REPO_DIR/$reponame.git --tags  >> $LOG_DIRECTORY 2>&1
+# git push http://$GIT_USERNAME:$GIT_PASSWORD@$GIT_REPO_DIR/$reponame.git --tags  >> $LOG_DIRECTORY 2>&1
 # Probably have to go ahead and push the tags up. Git module for ansible is EXTREMELY limiting...
 	if [ "$errors" != "$log_result" ]; then
 		git push origin --tags >> $LOG_DIRECTORY/$reponame.log 2>&1
