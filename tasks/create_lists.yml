@@ -1,6 +1,6 @@
 ---
 - block:
-  - name: copy repo list template
+  - name: copy repo list
     template:
       src: "repo_list.txt"
       dest: "{{ remote_working_dir }}/repo_list.txt"

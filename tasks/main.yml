@@ -32,6 +32,12 @@
   become_user: root
   when: "inventory_hostname == groups.all[0]" 
 
+- name: copy authors list
+  template:
+    src: "authors.txt"
+    dest: "{{ install_dir }}/repos/authors"
+    mode: 0644
+
 - name: include list creation
   include: create_lists.yml
   become: true
@@ -59,7 +65,7 @@
       enabled: yes
   
   - name: create count files
-    command: "echo '0' > {{ item }}" 
+    shell: echo "0" > {{ item }}
     args:
       chdir: /var/www/html
     with_items:
@@ -97,7 +103,7 @@
       enabled: yes
   become: true
   become_user: root
-  when: inventory_hostname == "groups.all[0]" and set_up_webpage == "true"
+  when: "inventory_hostname == groups.all[0] and set_up_webpage"
 ###############################
 
 - name: copy bash script

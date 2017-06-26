@@ -1,11 +1,5 @@
-http://url.to.repo/svn/repo
-http://url.to.repo/svn/repo2
-http://url.to.repo/svn/repo3
-http://url.to.repo/svn/repo4
-http://url.to.repo/svn/repo5
-http://url.to.repo/svn/repo6
-http://url.to.repo/svn/repo7
-http://url.to.repo/svn/repo8
-http://url.to.repo/svn/repo9
-http://url.to.repo/svn/repo10
-http://url.to.repo/svn/repo11
+http://10.146.13.53/svn/repo
+http://10.146.13.53/svn/repo2
+http://10.146.13.53/svn/repo3
+http://10.146.13.53/svn/repo4
+http://10.146.13.53/svn/repo5

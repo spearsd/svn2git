@@ -28,6 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'){
 			$error="None";
 			$current_repos=$current_repos + 1 ;
 			$successful_repos=$successful_repos + 1 ;
+			echo $current_repos;
+			echo $successful_repos;
 			//write to files
 			$repo_count_file = fopen("countlog.txt","w");
 			fwrite($repo_count_file, $current_repos);

@@ -1,20 +1,22 @@
 #!/bin/bash
 WEBPAGE_URL='http://{{ groups.all[0] }}'
 IP_ADDRESS='{{ inventory_hostname }}'
-TOKEN={{ token }}
+TOKEN='{{ token }}'
 INSTALL_DIR={{ install_dir }}
 LOG_DIRECTORY={{ install_dir }}/logs
 GIT_REPO_DIR='{{ git_repo_url }}'
-SVN_USERNAME={{ svn_username }}
-SVN_PASSWORD={{ svn_password }}
-GIT_USERNAME={{ git_username }}
-GIT_PASSWORD={{ git_password }}
+SVN_USERNAME='{{ svn_username }}'
+SVN_PASSWORD='{{ svn_password }}'
+GIT_USERNAME='{{ git_username }}'
+GIT_PASSWORD='{{ git_password }}'
+PROJECT_KEY='{{ project_key }}'
 
 # Should we go ahead and call git svn clone here so we can loop over it? Each repo has to have everything else done to it so...
 while IFS= read -r p
 do
 	# clear errors variable
-	errors="None"
+	errors='None'
+	log_result=''
 	# return to working directory
 	cd $INSTALL_DIR/repos
 
@@ -24,74 +26,76 @@ do
 	# clone the svn repo
 	# for cloning with credentials try:
 	# echo $SVN_PASSWORD | git svn clone --username $SVN_USERNAME --authors-file="" --stdlayout --prefix="origin/" $p -s $repo_name >> $LOG_DIRECTORY 2>&1
-	git svn clone --authors-file="" --stdlayout --prefix="origin/" $p -s $repo_name >> $LOG_DIRECTORY/$repo_name.log 2>&1
-	log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+	echo $SVN_PASSWORD | git svn clone --username $SVN_USERNAME --authors-file="authors" --stdlayout --prefix="origin/" $p -s $repo_name >> $LOG_DIRECTORY/$repo_name.log 2>&1
+	log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep "fatal:\|error:\|Bad" | cut -c-50)
 	if [ -z "$log_result" ]; then
-		$errors="None"
+		errors='None'
 	else
-		$errors=$log_result
-		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+		errors=$log_result
+		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
 	fi
 
 	# Navigate to the git svn cloned directory
-	if [ -z "$errors" -ne "$log_result" ]; then
+	if [ "$errors" != "$log_result" ]; then
 		cd $INSTALL_DIR/repos/$repo_name
 	fi
 
 # Loop over all peg revisions and remove them. Git has no comparible feature. NOTE: Make sure these can be erased.
-	if [ -z "$errors" -ne "$log_result" ]; then
+	if [ "$errors" != "$log_result" ]; then
 		for r in $(git for-each-ref --format='%(refname:short)' | grep @);
 		do 
-			git branch -D -r $r; >> $LOG_DIRECTORY/$repo_name.log 2>&1
+			git branch -D -r $r >> $LOG_DIRECTORY/$repo_name.log 2>&1
 		done
-		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep "fatal:\|error:\|Bad" | cut -c-50)
 		if [ -z "$log_result" ]; then
-			$errors="None"
+			errors='None'
 		else
-			$errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+			errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
 		fi
 	fi
 
 # Loop over all branches beginning with tags. Tag them and remove the remote branches.
-	if [ -z "$errors" -ne "$log_result" ]; then
+	if [ "$errors" != "$log_result" ]; then
 		for t in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/tags);
 		do 
-			git tag ${t##o*/} && git branch -D -r $t; >> $LOG_DIRECTORY/$repo_name.log 2>&1
+			git tag ${t##o*/} >> $LOG_DIRECTORY/$repo_name.log 2>&1
+			git branch -D -r $t >> $LOG_DIRECTORY/$repo_name.log 2>&1
 		done
-		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep "fatal:\|error:\|Bad" | cut -c-50)
 		if [ -z "$log_result" ]; then
-			$errors="None"
+			errors='None'
 		else
-			$errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+			errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
 		fi
 	fi
 
 # Loop over all remaining branches. Branch them and remove the remote branches.
-	if [ -z "$errors" -ne "$log_result" ]; then
+	if [ "$errors" != "$log_result" ]; then
 		for b in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin);
 		do 
-			git branch ${b##o*/} refs/remotes/$b && git branch -D -r $b; >> $LOG_DIRECTORY/$repo_name.log 2>&1
+			git branch ${b##o*/} refs/remotes/$b >> $LOG_DIRECTORY/$repo_name.log 2>&1
+			git branch -D -r $b >> $LOG_DIRECTORY/$repo_name.log 2>&1
 		done
-		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep "fatal:\|error:\|Bad" | cut -c-50)
 		if [ -z "$log_result" ]; then
-			$errors="None"
+			errors='None'
 		else
-			$errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+			errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
 		fi
 	fi
 
 # Remove the trunk branch. It is already now in git as the master branch.
-	if [ -z "$errors" -ne "$log_result" ]; then
+	if [ "$errors" != "$log_result" ]; then
 		git branch -d trunk >> $LOG_DIRECTORY/$repo_name.log 2>&1
-		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep "fatal:\|error:\|Bad" | cut -c-50)
 		if [ -z "$log_result" ]; then
-			$errors="None"
+			errors='None'
 		else
-			$errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+			errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
 		fi
 	fi
 	
@@ -110,26 +114,26 @@ do
 
 # Create the Bitbucket repository to push converted svn repo to.
 # To create repo: json needs name, has_wiki, is_private, and project with sub-info key.
-	if [ -z "$errors" -ne "$log_result" ]; then
-		curl -u $GIT_USERNAME:$GIT_PASSWORD -X POST -d '{ "name": "$repo_name", "has_wiki": false, "is_private": true, "project": {"key": "$project_key"} }' -H "Content-Type: application/json" $GIT_REPO_DIR/rest/api/1.0/projects/PROJECT_KEY/repos >> $LOG_DIRECTORY/$repo_name.log 2>&1
-		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+	if [ "$errors" != "$log_result" ]; then
+		curl -u $GIT_USERNAME:$GIT_PASSWORD -X POST -d '{ "name": "repo3", "has_wiki": false, "is_private": true, "project": {"key": "GIT"} }' -H "Content-Type: application/json" $GIT_REPO_DIR/rest/api/1.0/projects/GIT/repos
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep "fatal:\|error:\|Bad" | cut -c-50)
 		if [ -z "$log_result" ]; then
-			$errors="None"
+			errors='None'
 		else
-			$errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+			errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
 		fi
 	fi
 
 # Add the remote git repository as a remote. NOTE: We need to figure out how we will be authenticating with git here. SSH or user/pass over https?
-	if [ -z "$errors" -ne "$log_result" ]; then
+	if [ "$errors" != "$log_result" ]; then
 		git remote add origin https://$GIT_REPO_DIR/scm/$project_key/$repo_name.git >> $LOG_DIRECTORY/$repo_name.log 2>&1
-		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep "fatal:\|error:\|Bad" | cut -c-50)
 		if [ -z "$log_result" ]; then
-			$errors="None"
+			errors='None'
 		else
-			$errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+			errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
 		fi
 	fi
 
@@ -137,27 +141,27 @@ do
 # to use credentials on git pushes use:
 # git push https://$GIT_USERNAME:$GIT_PASSWORD@$GIT_REPO_DIR/$repo_name.git --tags  >> $LOG_DIRECTORY 2>&1
 # Probably have to go ahead and push the tags up. Git module for ansible is EXTREMELY limiting...
-	if [ -z "$errors" -ne "$log_result" ]; then
+	if [ "$errors" != "$log_result" ]; then
 		git push origin --tags >> $LOG_DIRECTORY/$repo_name.log 2>&1
-		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep "fatal:\|error:\|Bad" | cut -c-50)
 		if [ -z "$log_result" ]; then
-			$errors="None"
+			errors='None'
 		else
-			$errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+			errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
 		fi
 	fi
 
 # And if we should be all inclusive and just keep all git related functionality in this script, push all changes. Tags are NOT included during a push all.
-	if [ -z "$errors" -ne "$log_result" ]; then
+	if [ "$errors" != "$log_result" ]; then
 		git push origin --all >> $LOG_DIRECTORY/$repo_name.log 2>&1
-		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		log_result=$(cat $LOG_DIRECTORY/$repo_name.log | grep "fatal:\|error:\|Bad" | cut -c-50)
 		if [ -z "$log_result" ]; then
-			$errors="None"
-			curl --data "token=$TOKEN&status=success&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+			errors='None'
+			curl --data "token=$TOKEN&status=success&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
 		else
-			$errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+			errors=$log_result
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$repo_name&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
 		fi
 	fi
 
@@ -168,6 +172,6 @@ do
 	echo "-----------------------------------------------------" >> $LOG_DIRECTORY/main_log.log
 	echo "$repo_name" >> $LOG_DIRECTORY/main_log.log
 	echo "-----------------------------------------------------" >> $LOG_DIRECTORY/main_log.log
-	echo "$LOG_DIRECTORY/$repo_name.log" >> $LOG_DIRECTORY/main_log.log
+	echo $(cat $LOG_DIRECTORY/$repo_name.log) >> $LOG_DIRECTORY/main_log.log
 
-done < $INSTALL_DIR/repo_list.txt
+done < $INSTALL_DIR/repo_list

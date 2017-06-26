@@ -5,11 +5,12 @@ remote_working_dir: /opt/svn2git/tmp
 install_dir: /opt/svn2git
 # for multiple recipients use comma delimeter; for ex. test@test.com,test2@test.com
 email_address: dustin.spears@cgi.com
-svn_username: svnuser
-svn_password: svnpassword
-git_username: gituser
-git_password: gitpassword
-git_repo_url: url.to.git
+svn_username: test
+svn_password: test
+git_username: admin
+git_password: scott
+git_repo_url: 10.146.13.189:7990
+project_key: GIT
 
 set_up_webpage: true
-token: "LYRTjFUn657w3xK4F2soyWdM4gQ6BWpaJ2Mzpg0L"
+token: "test"
