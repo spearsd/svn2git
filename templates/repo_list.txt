@@ -1,5 +1,4 @@
-http://10.146.13.53/svn/repo
-http://10.146.13.53/svn/repo2
-http://10.146.13.53/svn/repo3
-http://10.146.13.53/svn/repo4
-http://10.146.13.53/svn/repo5
+http://54.173.30.71/svn/repo
+http://54.173.30.71/svn/repo2
+http://54.173.30.71/svn/repo3
+http://54.173.30.71/svn/repo4

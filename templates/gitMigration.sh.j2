@@ -11,9 +11,45 @@ GIT_USERNAME='{{ git_username }}'
 GIT_PASSWORD='{{ git_password }}'
 PROJECT_KEY='{{ project_key }}'
 
+check_errors()
+{
+	log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad\|errors\":" | cut -c-75)
+	if [ -z "$log_result" ]; then
+		errors='None'
+	else
+		calculate_duration
+		errors=$log_result
+		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
+	fi
+}
+final_error_check()
+{
+	log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "new branch" | cut -c-15)
+	if [ ! -z "$log_result" ]; then
+		calculate_duration
+		errors='None'
+		curl --data "token=$TOKEN&status=success&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
+	else
+		log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad\|errors\":" | cut -c-75)
+		calculate_duration
+		errors=$log_result
+		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
+	fi
+}
+calculate_duration()
+{
+	duration=$SECONDS
+	hours=$(($duration / 3600))
+	hminusm=$(($duration-$(($hours*3600))))
+	minutes=$(($hminusm / 60))
+	seconds=$(($hminusm % 60))
+}
 # Should we go ahead and call git svn clone here so we can loop over it? Each repo has to have everything else done to it so...
-while IFS= read -r p
+while IFS= read -r p || [ -n "$p" ];
 do
+	# timer for duration
+	SECONDS=0
+	
 	# clear errors variable
 	errors='None'
 	log_result=''
@@ -23,17 +59,36 @@ do
 	# read svn repo name for repo_list
 	reponame=$(echo "$p" | rev | cut -d '/' -f 1 | rev)
 
+	# remove existing repo folder
+	rm -r -f $INSTALL_DIR/repos/$reponame
+
+	# pull svn authors and append to existing authors file
+	svn log --quiet $p | grep -E "r[0-9]+ \| .+ \|" | cut -d'|' -f2 | sed 's/ //g' | sort | uniq > svn_authors
+	while IFS= read -r a || [ -n "$a" ];
+	do
+		new_author=$(echo "$a" | cut -d ' ' -f 1)
+		 echo "$new_author" >> new_authors
+	done < $INSTALL_DIR/repos/authors
+	svn_authors_to_add=$(grep -v -F -x -f new_authors svn_authors)
+	echo "$svn_authors_to_add" >> authors_to_add
+	if [ ! -z "$(tail -n1 authors)" ]; then
+		echo "" >> authors
+	fi
+	while IFS= read -r a || [ -n "$a" ];
+	do
+		echo "$a = $a $a <$a@cgi.com>" >> authors
+	done < $INSTALL_DIR/repos/authors_to_add
+	sort -o authors authors
+	sed -i '/^\s*$/d' ./authors
+	sed -i '/ =   <@cgi.com>/d' ./authors
+	rm -f new_authors
+	rm -f svn_authors
+	rm -f authors_to_add
+
 	# clone the svn repo
 	# for cloning with credentials try:
-	# echo $SVN_PASSWORD | git svn clone --username $SVN_USERNAME --authors-file="" --stdlayout --prefix="origin/" $p -s $reponame >> $LOG_DIRECTORY 2>&1
-	echo $SVN_PASSWORD | git svn clone --username $SVN_USERNAME --authors-file="authors" --stdlayout --prefix="origin/" $p -s $reponame >> $LOG_DIRECTORY/$reponame.log 2>&1
-	log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad" | cut -c-50)
-	if [ -z "$log_result" ]; then
-		errors='None'
-	else
-		errors=$log_result
-		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
-	fi
+	echo $SVN_PASSWORD | git svn clone --username $SVN_USERNAME --authors-file="authors" --stdlayout --prefix="origin/" $p -s $reponame > $LOG_DIRECTORY/$reponame.log 2>&1
+	check_errors
 
 	# Navigate to the git svn cloned directory
 	if [ "$errors" != "$log_result" ]; then
@@ -46,13 +101,7 @@ do
 		do 
 			git branch -D -r $r >> $LOG_DIRECTORY/$reponame.log 2>&1
 		done
-		log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad" | cut -c-50)
-		if [ -z "$log_result" ]; then
-			errors='None'
-		else
-			errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
-		fi
+		check_errors
 	fi
 
 # Loop over all branches beginning with tags. Tag them and remove the remote branches.
@@ -62,13 +111,7 @@ do
 			git tag ${t##o*/} >> $LOG_DIRECTORY/$reponame.log 2>&1
 			git branch -D -r $t >> $LOG_DIRECTORY/$reponame.log 2>&1
 		done
-		log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad" | cut -c-50)
-		if [ -z "$log_result" ]; then
-			errors='None'
-		else
-			errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
-		fi
+		check_errors
 	fi
 
 # Loop over all remaining branches. Branch them and remove the remote branches.
@@ -78,91 +121,39 @@ do
 			git branch ${b##o*/} refs/remotes/$b >> $LOG_DIRECTORY/$reponame.log 2>&1
 			git branch -D -r $b >> $LOG_DIRECTORY/$reponame.log 2>&1
 		done
-		log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad" | cut -c-50)
-		if [ -z "$log_result" ]; then
-			errors='None'
-		else
-			errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
-		fi
+		check_errors
 	fi
 
 # Remove the trunk branch. It is already now in git as the master branch.
 	if [ "$errors" != "$log_result" ]; then
 		git branch -d trunk >> $LOG_DIRECTORY/$reponame.log 2>&1
-		log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad" | cut -c-50)
-		if [ -z "$log_result" ]; then
-			errors='None'
-		else
-			errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
-		fi
+		check_errors
 	fi
-	
-# Create the Bitbucket project for repositories to be created in. NOTE: If we create a project for all converted repos to live in, move this outside while loop.
-# To create a project: json needs name, key, description.
-	#if [ -z "$errors" -ne "$log_result" ]; then
-		#curl -u $GIT_USERNAME:$GIT_PASSWORD -X POST -d '{ "name": "$project_name", "key": "$PROJECT_KEY" }' -H "Content-Type: application/json" $GIT_REPO_DIR/rest/api/1.0/projects/ >> $LOG_DIRECTORY/$reponame.log 2>&1
-		#log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
-		#if [ -z "$log_result" ]; then
-			#$errors="None"
-		#else
-			#$errors=$log_result
-			#curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
-		#fi
-	#fi
 	
 # Create the Bitbucket repository to push converted svn repo to.
 # To create repo: json needs name, has_wiki, is_private, and project with sub-info key.
 	if [ "$errors" != "$log_result" ]; then
 		curl -u $GIT_USERNAME:$GIT_PASSWORD -X POST -d '{ "name": '\""$reponame\""', "has_wiki": false, "is_private": true, "project": {"key": '\""$PROJECT_KEY\""'} }' -H "Content-Type: application/json" --basic $GIT_REPO_DIR/rest/api/1.0/projects/$PROJECT_KEY/repos >> $LOG_DIRECTORY/$reponame.log 2>&1
-		log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad" | cut -c-50)
-		if [ -z "$log_result" ]; then
-			errors='None'
-		else
-			errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
-		fi
+		check_errors
 	fi
 
 # Add the remote git repository as a remote. NOTE: We need to figure out how we will be authenticating with git here. SSH or user/pass over https?
 	if [ "$errors" != "$log_result" ]; then
 		git remote add origin http://$GIT_USERNAME:$GIT_PASSWORD@$GIT_REPO_DIR/scm/$PROJECT_KEY/$reponame.git >> $LOG_DIRECTORY/$reponame.log 2>&1
-		log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad" | cut -c-50)
-		if [ -z "$log_result" ]; then
-			errors='None'
-		else
-			errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
-		fi
+		check_errors
 	fi
 
-#################################################
-# to use credentials on git pushes use:
-# git push http://$GIT_USERNAME:$GIT_PASSWORD@$GIT_REPO_DIR/$reponame.git --tags  >> $LOG_DIRECTORY 2>&1
 # Probably have to go ahead and push the tags up. Git module for ansible is EXTREMELY limiting...
 	if [ "$errors" != "$log_result" ]; then
 		git push origin --tags >> $LOG_DIRECTORY/$reponame.log 2>&1
-		log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad" | cut -c-50)
-		if [ -z "$log_result" ]; then
-			errors='None'
-		else
-			errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
-		fi
+		check_errors
 	fi
 
 # And if we should be all inclusive and just keep all git related functionality in this script, push all changes. Tags are NOT included during a push all.
 	if [ "$errors" != "$log_result" ]; then
 		git push origin --all >> $LOG_DIRECTORY/$reponame.log 2>&1
 		log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad" | cut -c-50)
-		if [ -z "$log_result" ]; then
-			errors='None'
-			curl --data "token=$TOKEN&status=success&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
-		else
-			errors=$log_result
-			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
-		fi
+		final_error_check
 	fi
 
 # If the push was a success, should we clean up the git repository since it now lives in Bitbucket and is not needed locally?
@@ -175,3 +166,25 @@ do
 	echo $(cat $LOG_DIRECTORY/$reponame.log) >> $LOG_DIRECTORY/main_log.log
 
 done < $INSTALL_DIR/repo_list
+
+#################################################
+# NOTES											#
+#################################################
+
+#################################################
+# Create the Bitbucket project for repositories to be created in. NOTE: If we create a project for all converted repos to live in, move this outside while loop.
+# To create a project: json needs name, key, description.
+	#if [ -z "$errors" -ne "$log_result" ]; then
+		#curl -u $GIT_USERNAME:$GIT_PASSWORD -X POST -d '{ "name": "$project_name", "key": "$PROJECT_KEY" }' -H "Content-Type: application/json" $GIT_REPO_DIR/rest/api/1.0/projects/ >> $LOG_DIRECTORY/$reponame.log 2>&1
+		#log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep 'fatal:\|error:\|Bad' cut -d ' ' -f 1-4)
+		#if [ -z "$log_result" ]; then
+			#$errors="None"
+		#else
+			#$errors=$log_result
+			#curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors" $WEBPAGE_URL 2>&1 /dev/null
+		#fi
+	#fi
+
+#################################################
+# to use credentials on git pushes use:
+# git push http://$GIT_USERNAME:$GIT_PASSWORD@$GIT_REPO_DIR/$reponame.git --tags  >> $LOG_DIRECTORY 2>&1

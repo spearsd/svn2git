@@ -25,6 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'){
 			//update numbers
 			$host_ip=$_POST["ip_address"];
 			$repo_name=$_POST["repo_name"];
+			$duration=$_POST["duration"];
 			$error="None";
 			$current_repos=$current_repos + 1 ;
 			$successful_repos=$successful_repos + 1 ;
@@ -51,6 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'){
     	<td class="tg-name_bg">$repo_name</td>
     	<td class="tg-success">Success</td>
     	<td class="tg-name_bg">$error</td>
+    	<td class="tg-name_bg">$duration</td>
 		<td class="tg-name_bg">$host_ip</td>
 	</tr>
 </table>
@@ -63,6 +65,7 @@ EOT;
     	<td class="">$repo_name</td>
     	<td class="tg-success_alt">Success</td>
     	<td class="">$error</td>
+    	<td class="">$duration</td>
 		<td class="">$host_ip</td>
 	</tr>
 </table>
@@ -73,6 +76,7 @@ EOT;
 		if (htmlspecialchars($_POST["status"]) === "failed"){
 			$host_ip=$_POST["ip_address"];
 			$repo_name=$_POST["repo_name"];
+			$duration=$_POST["duration"];
 			$error=$_POST["error_msg"];
 			$current_repos=$current_repos + 1;
 			$failed_repos=$failed_repos + 1;
@@ -97,6 +101,7 @@ EOT;
 		<td class="tg-name_bg">$repo_name</td>
 		<td class="tg-failed">Errors</td>
 		<td class="tg-name_bg">$error...</td>
+		<td class="tg-name_bg">$duration</td>
 		<td class="tg-name_bg">$host_ip</td>
 	</tr>
 </table>
@@ -109,6 +114,7 @@ EOT;
 		<td class="">$repo_name</td>
 		<td class="tg-failed_alt">Errors</td>
 		<td class="">$error...</td>
+		<td class="">$duration</td>
 		<td class="">$host_ip</td>
 	</tr>
 </table>
