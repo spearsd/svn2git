@@ -96,6 +96,13 @@
       - { src: "index.php.j2", dest: "index.php" }
       - { src: "table.html.j2", dest: "table.html" }
 
+  - name: allow connections to httpd
+    shell: "{{ item }}"
+    with_items:
+      - "setsebool -P httpd_unified 1"
+      - "setsebool -P httpd_can_network_connect 1"
+    when: ansible_distribution == "CentOS"
+
   - name: restart apache
     service:
       name: httpd
