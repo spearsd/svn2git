@@ -118,3 +118,10 @@
   shell: nohup ./gitMigration.sh &
   args:
     chdir: "{{ install_dir }}/repos"
+  become: true
+  become_user: root
+
+- name: show webpage address
+  debug:
+    msg: "Go to http://{{ groups.all[0] }} for the conversion status page."
+  when: "inventory_hostname == groups.all[0] and set_up_webpage"

@@ -13,7 +13,7 @@ PROJECT_KEY='{{ project_key }}'
 
 check_errors()
 {
-	log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad\|errors\":" | cut -c-75)
+	log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad \|errors\":" | cut -c-75 | head -1)
 	if [ -z "$log_result" ]; then
 		errors='None'
 	else
@@ -24,13 +24,13 @@ check_errors()
 }
 final_error_check()
 {
-	log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "new branch" | cut -c-15)
+	log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "new branch" | cut -c-15 | head -1)
 	if [ ! -z "$log_result" ]; then
 		calculate_duration
 		errors='None'
 		curl --data "token=$TOKEN&status=success&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
 	else
-		log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad\|errors\":" | cut -c-75)
+		log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad \|errors\":" | cut -c-75 | head -1)
 		calculate_duration
 		errors=$log_result
 		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
