@@ -63,27 +63,19 @@ do
 	rm -r -f $INSTALL_DIR/repos/$reponame
 
 	# pull svn authors and append to existing authors file
-	svn log --username $SVN_USERNAME --password $SVN_PASSWORD --quiet $p | grep -E "r[0-9]+ \| .+ \|" | cut -d'|' -f2 | sed 's/ //g' | sort | uniq > svn_authors
-	while IFS= read -r a || [ -n "$a" ];
+	svn log $p --username $SVN_USERNAME --password $SVN_PASSWORD --xml --quiet | grep author | sort -u | perl -pe 's/.*>(.*?)<.*/$1/' > svn_authors
+	cat authors | cut -f1 -d " " > new_authors
+	grep -F -x -v -f new_authors svn_authors > authorsToAdd
+	while read -r line || [[ -n "$line" ]];
 	do
-		new_author=$(echo "$a" | cut -d ' ' -f 1)
-		 echo "$new_author" >> new_authors
-	done < $INSTALL_DIR/repos/authors
-	svn_authors_to_add=$(grep -v -F -x -f new_authors svn_authors)
-	echo "$svn_authors_to_add" >> authors_to_add
-	if [ ! -z "$(tail -n1 authors)" ]; then
-		echo "" >> authors
-	fi
-	while IFS= read -r a || [ -n "$a" ];
-	do
-		echo "$a = $a $a <$a@cgi.com>" >> authors
-	done < $INSTALL_DIR/repos/authors_to_add
+		echo "$line = $line $line <$line@email.com>" >> authors
+	done < authorsToAdd
 	sort -o authors authors
-	sed -i '/^\s*$/d' ./authors
-	sed -i '/ =   <@cgi.com>/d' ./authors
+	#sed -i '/^\s*$/d' ./authors
+	#sed -i '/ =   <@cgi.com>/d' ./authors
 	rm -f new_authors
 	rm -f svn_authors
-	rm -f authors_to_add
+	rm -f authorsToAdd
 
 	# clone the svn repo
 	# for cloning with credentials try:
