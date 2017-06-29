@@ -13,29 +13,35 @@ PROJECT_KEY='{{ project_key }}'
 
 check_errors()
 {
-	log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad \|errors\":" | cut -c-75 | head -1)
-	if [ -z "$log_result" ]; then
-		errors='None'
-	else
-		calculate_duration
-		errors=$log_result
-		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
+	error_check=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad \|errors\":" | cut -c-75 | head -1)
+	if [! -z "$error_check" ]; then
+		continue
 	fi
 }
+
 final_error_check()
 {
 	log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "new branch" | cut -c-15 | head -1)
+	get_error=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad \|errors\":" | cut -c-75 | head -1)
 	if [ ! -z "$log_result" ]; then
-		calculate_duration
-		errors='None'
-		curl --data "token=$TOKEN&status=success&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
+		error_check=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:" | cut -c-75 | head -1)
+		if [ -z "$error_check" ]; then
+			calculate_duration
+			errors='None'
+			curl --data "token=$TOKEN&status=success&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> /dev/null 2>&1
+		fi
+	elif [ -z "$log_result" ]; then
+		if [ ! -z "$get_error" ]; then
+			calculate_duration
+			errors=$get_error
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> /dev/null 2>&1
+		fi
 	else
-		log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad \|errors\":" | cut -c-75 | head -1)
 		calculate_duration
-		errors=$log_result
-		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> $LOG_DIRECTORY/curl.log 2>&1
-	fi
+		errors="Unknown condition."
+		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> /dev/null 2>&1
 }
+
 calculate_duration()
 {
 	duration=$SECONDS
@@ -52,7 +58,7 @@ do
 	
 	# clear errors variable
 	errors='None'
-	log_result=''
+	error_check=''
 	# return to working directory
 	cd $INSTALL_DIR/repos
 
@@ -83,73 +89,54 @@ do
 	check_errors
 
 	# Navigate to the git svn cloned directory
-	if [ "$errors" != "$log_result" ]; then
-		cd $INSTALL_DIR/repos/$reponame
-	fi
+	cd $INSTALL_DIR/repos/$reponame
 
 # Loop over all peg revisions and remove them. Git has no comparible feature. NOTE: Make sure these can be erased.
-	if [ "$errors" != "$log_result" ]; then
-		for r in $(git for-each-ref --format='%(refname:short)' | grep @);
-		do 
-			git branch -D -r $r >> $LOG_DIRECTORY/$reponame.log 2>&1
-		done
-		check_errors
-	fi
+	for r in $(git for-each-ref --format='%(refname:short)' | grep @);
+	do 
+		git branch -D -r $r >> $LOG_DIRECTORY/$reponame.log 2>&1
+	done
+	check_errors
 
 # Loop over all branches beginning with tags. Tag them and remove the remote branches.
-	if [ "$errors" != "$log_result" ]; then
-		for t in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/tags);
-		do 
-			git tag ${t##o*/} >> $LOG_DIRECTORY/$reponame.log 2>&1
-			git branch -D -r $t >> $LOG_DIRECTORY/$reponame.log 2>&1
-		done
-		check_errors
-	fi
-
+	for t in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/tags);
+	do 
+		git tag ${t##o*/} >> $LOG_DIRECTORY/$reponame.log 2>&1
+		git branch -D -r $t >> $LOG_DIRECTORY/$reponame.log 2>&1
+	done
+	check_errors
+	
 # Loop over all remaining branches. Branch them and remove the remote branches.
-	if [ "$errors" != "$log_result" ]; then
-		for b in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin);
-		do 
-			git branch ${b##o*/} refs/remotes/$b >> $LOG_DIRECTORY/$reponame.log 2>&1
-			git branch -D -r $b >> $LOG_DIRECTORY/$reponame.log 2>&1
-		done
-		check_errors
-	fi
+	for b in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin);
+	do 
+		git branch ${b##o*/} refs/remotes/$b >> $LOG_DIRECTORY/$reponame.log 2>&1
+		git branch -D -r $b >> $LOG_DIRECTORY/$reponame.log 2>&1
+	done
+	check_errors
 
 # Remove the trunk branch. It is already now in git as the master branch.
-	if [ "$errors" != "$log_result" ]; then
-		git branch -d trunk >> $LOG_DIRECTORY/$reponame.log 2>&1
-		check_errors
-	fi
+	git branch -d trunk >> $LOG_DIRECTORY/$reponame.log 2>&1
+	check_errors
 	
 # Create the Bitbucket repository to push converted svn repo to.
 # To create repo: json needs name, has_wiki, is_private, and project with sub-info key.
-	if [ "$errors" != "$log_result" ]; then
-		curl -u $GIT_USERNAME:$GIT_PASSWORD -X POST -d '{ "name": '\""$reponame\""', "has_wiki": false, "is_private": true, "project": {"key": '\""$PROJECT_KEY\""'} }' -H "Content-Type: application/json" --basic $GIT_REPO_DIR/rest/api/1.0/projects/$PROJECT_KEY/repos >> $LOG_DIRECTORY/$reponame.log 2>&1
-		check_errors
-	fi
+	curl -u $GIT_USERNAME:$GIT_PASSWORD -X POST -d '{ "name": '\""$reponame\""', "has_wiki": false, "is_private": true, "project": {"key": '\""$PROJECT_KEY\""'} }' -H "Content-Type: application/json" --basic $GIT_REPO_DIR/rest/api/1.0/projects/$PROJECT_KEY/repos >> $LOG_DIRECTORY/$reponame.log 2>&1
+	check_errors
 
 # Add the remote git repository as a remote. NOTE: We need to figure out how we will be authenticating with git here. SSH or user/pass over https?
-	if [ "$errors" != "$log_result" ]; then
-		git remote add origin http://$GIT_USERNAME:$GIT_PASSWORD@$GIT_REPO_DIR/scm/$PROJECT_KEY/$reponame.git >> $LOG_DIRECTORY/$reponame.log 2>&1
-		check_errors
-	fi
+	git remote add origin http://$GIT_USERNAME:$GIT_PASSWORD@$GIT_REPO_DIR/scm/$PROJECT_KEY/$reponame.git >> $LOG_DIRECTORY/$reponame.log 2>&1
+	check_errors
 
 # Probably have to go ahead and push the tags up. Git module for ansible is EXTREMELY limiting...
-	if [ "$errors" != "$log_result" ]; then
-		git push origin --tags >> $LOG_DIRECTORY/$reponame.log 2>&1
-		check_errors
-	fi
+	git push origin --tags >> $LOG_DIRECTORY/$reponame.log 2>&1
+	check_errors
 
 # And if we should be all inclusive and just keep all git related functionality in this script, push all changes. Tags are NOT included during a push all.
-	if [ "$errors" != "$log_result" ]; then
-		git push origin --all >> $LOG_DIRECTORY/$reponame.log 2>&1
-		final_error_check
-	fi
+	git push origin --all >> $LOG_DIRECTORY/$reponame.log 2>&1
+	final_error_check
 
 # If the push was a success, should we clean up the git repository since it now lives in Bitbucket and is not needed locally?
 	
-
 	# finally, add repo results to main log file
 	echo "-----------------------------------------------------" >> $LOG_DIRECTORY/main_log.log
 	echo "$reponame" >> $LOG_DIRECTORY/main_log.log
