@@ -1,4 +1,4 @@
-http://54.162.129.250/svn/repo
-http://54.162.129.250/svn/repo2
-http://54.162.129.250/svn/repo3
-http://54.162.129.250/svn/repo4
+http://10.146.13.53/svn/repo
+http://10.146.13.53/svn/repo2
+http://10.146.13.53/svn/repo3
+http://10.146.13.53/svn/repo4
