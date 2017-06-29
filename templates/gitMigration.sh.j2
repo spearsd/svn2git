@@ -40,6 +40,7 @@ final_error_check()
 		calculate_duration
 		errors="Unknown condition."
 		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> /dev/null 2>&1
+	fi
 }
 
 calculate_duration()
