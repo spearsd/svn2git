@@ -14,8 +14,11 @@ PROJECT_KEY='{{ project_key }}'
 check_errors()
 {
 	error_check=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad \|errors\":" | cut -c-75 | head -1)
-	if [! -z "$error_check" ]; then
-		continue
+	if [ ! -z "$error_check" ]; then
+		calculate_duration
+		errors=$error_check
+		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> /dev/null 2>&1
+		continue 2
 	fi
 }
 
@@ -64,28 +67,37 @@ do
 	cd $INSTALL_DIR/repos
 
 	# read svn repo name for repo_list
-	reponame=$(echo "$p" | rev | cut -d '/' -f 1 | rev)
-
-	# remove existing repo folder
-	rm -r -f $INSTALL_DIR/repos/$reponame
-
+	reponame=$(echo "$p" | rev | cut -d '/' -f 1 | rev | awk '{$1=$1};1')
+	
+	if [ -z "$reponame" ]; then
+		reponame=$(echo "$p" | rev | cut -d '/' -f 2 | rev | awk '{$1=$1};1')
+	fi
+	if [ ! -z "$reponame" ]; then
+		# remove existing repo folder
+		rm -r -f $INSTALL_DIR/repos/$reponame
+	fi
 	# pull svn authors and append to existing authors file
 	svn log $p --username $SVN_USERNAME --password $SVN_PASSWORD --xml --quiet | grep author | sort -u | perl -pe 's/.*>(.*?)<.*/$1/' > svn_authors
-	cat authors | cut -f1 -d " " > new_authors
+	cat authors | cut -f1 -d "=" | sed -e 's/[[:space:]]*$//' > new_authors
 	grep -F -x -v -f new_authors svn_authors > authorsToAdd
 	while read -r line || [[ -n "$line" ]];
 	do
 		echo "$line = $line $line <$line@email.com>" >> authors
 	done < authorsToAdd
+	noauthor=$(cat authors | grep "no author")
+	if [ -z "$noauthor" ]; then
+		echo "(no author) = No Author <noauthor@email.com>" >> authors
+	fi
 	sort -o authors authors
 	#sed -i '/^\s*$/d' ./authors
 	#sed -i '/ =   <@cgi.com>/d' ./authors
-	rm -f new_authors
-	rm -f svn_authors
-	rm -f authorsToAdd
+	#rm -f new_authors
+	#rm -f svn_authors
+	#rm -f authorsToAdd
 
 	# clone the svn repo
 	# for cloning with credentials try:
+	
 	echo $SVN_PASSWORD | git svn clone --username $SVN_USERNAME --authors-file="authors" --stdlayout --prefix="origin/" $p -s $reponame > $LOG_DIRECTORY/$reponame.log 2>&1
 	check_errors
 
@@ -167,3 +179,14 @@ done < $INSTALL_DIR/repo_list
 #################################################
 # to use credentials on git pushes use:
 # git push http://$GIT_USERNAME:$GIT_PASSWORD@$GIT_REPO_DIR/$reponame.git --tags  >> $LOG_DIRECTORY 2>&1
+
+#################################################
+# for using svn dump files. NOTE: Must have a way to pull or copy the dump files over...
+
+#svn_dump_migration()
+#{
+	#svnadmin create $reponame
+	#svnadmin load --force-uuid $INSTALL_DIR/repos/$reponame < $DUMP_FILE
+	#git svn clone file://$INSTALL_DIR/repos/$reponame --authors-file="authors" --stdlayout --prefix="origin/" -s $reponame-"git" > $LOG_DIRECTORY/$reponame.log 2>&1
+
+#}
