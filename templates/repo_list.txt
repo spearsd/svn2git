@@ -1,1 +1,4 @@
-http://svn.python.org/projects/python
+http://10.146.13.13/svn/repo
+http://10.146.13.13/svn/repo2/
+http://10.146.13.13/svn/repo3/
+http://10.146.13.13/svn/repo4

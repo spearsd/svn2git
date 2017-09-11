@@ -19,8 +19,102 @@ $failed_count_file = fopen("failed_countlog.txt","r");
 $failed_repos = fgets($failed_count_file,1000);
 fclose($failed_count_file);
 
+$file = file('repo_list');
+$lines = file('queue_table.html');
+$last = sizeof($lines) - 1 ;
+unset($lines);
+file_put_contents('queue_table.html', implode(PHP_EOL, $lines));
+$table = <<<EOT
+<table class="tg" style="margin-left:1%;margin-right:2%;float:right">
+	<col width="350px" />
+  <tr>
+    <th class="tg-header">Repositories in Queue</th>
+  </tr>
+EOT;
+file_put_contents('queue_table.html', $table.PHP_EOL , FILE_APPEND);
+$count = 0;
+foreach ($file as &$repo) {
+	$repo_short = substr($repo,0,45);
+	if ($count % 2 == 0) {
+		$table_row = <<<EOT
+	<tr>
+		<td class="tg-name_bg">$repo_short</td>
+	</tr>
+EOT;
+	}
+	else{
+		$table_row = <<<EOT
+	<tr>
+		<td class="">$repo_short</td>
+	</tr>
+EOT;
+	}
+	file_put_contents('queue_table.html', $table_row.PHP_EOL , FILE_APPEND);
+	$count++;
+}
+$table_row = <<<EOT
+</table>
+EOT;
+file_put_contents('queue_table.html', $table_row.PHP_EOL , FILE_APPEND);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST'){
 	if (htmlspecialchars($_POST["token"]) === "$token"){
+		if (htmlspecialchars($_POST["get_next_repo"]) === "true"){
+			$file = file('repo_list');
+			$first_line = $file[0];
+			unset($file[0]);
+			file_put_contents('repo_list', $file);
+			echo $first_line;
+			$lines = file('queue_table.html'); 
+			$last = sizeof($lines) - 1 ;
+			unset($lines[$last]);
+			file_put_contents('queue_table.html', implode(PHP_EOL, $lines));
+			foreach ($file as &$repo) {
+				$repo_short = substr($repo,0,45);
+				if ($current_repos % 2 == 0) {
+				$table_row = <<<EOT
+	<tr>
+		<td class="tg-name_bg">$repo_short</td>
+	</tr>
+EOT;
+				}
+				else{
+				$table_row = <<<EOT
+	<tr>
+		<td class="">$repo_short</td>
+	</tr>
+EOT;
+				}
+				file_put_contents('queue_table.html', $table_row.PHP_EOL , FILE_APPEND);
+			}
+			$table_row = <<<EOT
+</table>
+EOT;
+			file_put_contents('queue_table.html', $table_row.PHP_EOL , FILE_APPEND);
+		}
+		if (htmlspecialchars($_POST["push_queue_check"]) === "true"){
+			$file = file('push_queue.txt');
+			$check="false";
+			foreach ($file as &$repo) {
+				$repo = trim($repo);
+				if(!empty($repo)){
+					$check="false";
+				}
+				else{
+					$check="true";
+				}
+			}
+			if($check == "true"){
+				echo "true";
+			}
+		}
+		if (htmlspecialchars($_POST["push_queue_add"]) === "true"){
+			$push_repo = htmlspecialchars($_POST["push_queue_repo"]);
+			file_put_contents('push_queue.txt', $push_repo);
+		}
+		if (htmlspecialchars($_POST["push_queue_remove"]) === "true"){
+			file_put_contents('push_queue.txt', " \n");
+		}
 		if (htmlspecialchars($_POST["status"]) === "success"){
 			//update numbers
 			$host_ip=$_POST["ip_address"];
@@ -29,8 +123,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'){
 			$error="None";
 			$current_repos=$current_repos + 1 ;
 			$successful_repos=$successful_repos + 1 ;
-			echo $current_repos;
-			echo $successful_repos;
 			//write to files
 			$repo_count_file = fopen("countlog.txt","w");
 			fwrite($repo_count_file, $current_repos);
@@ -38,9 +130,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'){
 			$success_count_file = fopen("success_countlog.txt","w");
 			fwrite($success_count_file, $successful_repos);
 			fclose($success_count_file);
-			//add row to table
-			// for successes
-// deletes </table> from table.html
 			$lines = file('table.html'); 
 			$last = sizeof($lines) - 1 ; 
 			unset($lines[$last]);
@@ -52,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'){
     	<td class="tg-name_bg">$repo_name</td>
     	<td class="tg-success">Success</td>
     	<td class="tg-name_bg">$error</td>
-    	<td class="tg-name_bg">$duration</td>
+    	<td class="tg-name_bg" style="text-align:center">$duration</td>
 		<td class="tg-name_bg">$host_ip</td>
 	</tr>
 </table>
@@ -65,7 +154,7 @@ EOT;
     	<td class="">$repo_name</td>
     	<td class="tg-success_alt">Success</td>
     	<td class="">$error</td>
-    	<td class="">$duration</td>
+    	<td class="" style="text-align:center">$duration</td>
 		<td class="">$host_ip</td>
 	</tr>
 </table>
@@ -101,7 +190,7 @@ EOT;
 		<td class="tg-name_bg">$repo_name</td>
 		<td class="tg-failed">Errors</td>
 		<td class="tg-name_bg">$error...</td>
-		<td class="tg-name_bg">$duration</td>
+		<td class="tg-name_bg" style="text-align:center">$duration</td>
 		<td class="tg-name_bg">$host_ip</td>
 	</tr>
 </table>
@@ -114,7 +203,7 @@ EOT;
 		<td class="">$repo_name</td>
 		<td class="tg-failed_alt">Errors</td>
 		<td class="">$error...</td>
-		<td class="">$duration</td>
+		<td class="" style="text-align:center">$duration</td>
 		<td class="">$host_ip</td>
 	</tr>
 </table>
@@ -124,11 +213,11 @@ EOT;
 		}
 	}
 }
+if ($_SERVER['REQUEST_METHOD'] === 'GET'){
 ?>
-
 <html>
     <head>
-    <meta http-equiv="refresh" content="5;URL='http://<?php echo $ip_address; ?>'">
+    <!-- <meta http-equiv="refresh" content="5;URL='http://<?php //echo $ip_address; ?>'"> -->
     </head>
 	<body>
 	<h1>SVN to Git Conversion Results</h1>
@@ -139,5 +228,7 @@ EOT;
 	</p>
 	<br/><br/><br/><hr><br/><br/><br/>
 	<?php include('table.html'); ?>
+	<?php include('queue_table.html'); ?>
 	</body>
 </html>
+<?php } ?>

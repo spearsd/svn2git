@@ -2,9 +2,9 @@
 html, body {height:100%;}
 html {display:table; width:100%;}
 body {display:table-cell; text-align:center;}
-.tg  {border-collapse:collapse;border-spacing:0;border-color:#aaa;margin-left:auto;margin-right:auto}
-.tg td{font-family:Arial, sans-serif;font-size:14px;padding:6px 11px;border-style:solid;border-width:0px;overflow:hidden;word-break:normal;border-color:#aaa;color:#333;background-color:#fff;border-top-width:1px;border-bottom-width:1px;}
-.tg th{font-family:Arial, sans-serif;font-size:14px;font-weight:bold;padding:6px 11px;border-style:solid;border-width:0px;overflow:hidden;word-break:normal;border-color:#aaa;color:#fff;background-color:#f38630;border-top-width:1px;border-bottom-width:1px;}
+.tg  {border-collapse:collapse;border-spacing:0;border-color:#aaa;table-layout:fixed;}
+.tg td{font-family:Arial, sans-serif;font-size:14px;padding:6px 11px;border-style:solid;border-width:0px;overflow:hidden;word-break:normal;border-color:#aaa;color:#333;background-color:#fff;border-top-width:1px;border-bottom-width:1px;overflow: hidden;}
+.tg th{font-family:Arial, sans-serif;font-size:14px;font-weight:bold;padding:6px 11px;border-style:solid;border-width:0px;overflow:hidden;word-break:normal;border-color:#aaa;color:#fff;background-color:#f38630;border-top-width:1px;border-bottom-width:1px;overflow: hidden;}
 .tg .tg-name_bg{background-color:#ecf4ff}
 .tg .tg-success_alt{color:#32cb00}
 .tg .tg-number{background-color:#ecf4ff;font-weight:bold}
@@ -14,7 +14,14 @@ body {display:table-cell; text-align:center;}
 .tg .tg-number_alt{font-weight:bold}
 .tg .tg-header{background-color:#3166ff;vertical-align:top}
 </style>
-<table class="tg">
+
+<table class="tg" style="margin-left:2%;margin-right:1%;float:left">
+    <col width="20px" />
+    <col width="50px" />
+    <col width="20px" />
+    <col width="560px" />
+    <col width="150px" />
+    <col width="70px" />
   <tr>
     <th class="tg-header">#</th>
     <th class="tg-header">Repository</th>

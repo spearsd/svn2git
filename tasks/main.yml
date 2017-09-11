@@ -23,33 +23,17 @@
   become: true
   become_user: root
 
-- name: create remote working directory
-  file:
-    path: "{{ remote_working_dir }}"
-    state: directory
-    mode: 0755
-  become: true
-  become_user: root
-  when: "inventory_hostname == groups.all[0]" 
-
 - name: copy authors list
   template:
     src: "authors.txt"
     dest: "{{ install_dir }}/repos/authors"
-    mode: 0644
-
-- name: include list creation
-  include: create_lists.yml
+    mode: 0766
   become: true
   become_user: root
 
 # this block creates the webpage for displaying conversion status
 ########################
 - block:
-  - name: set total_repos variable
-    set_fact:
-      total_repos: "{{ repo_list.stdout_lines|length }}"
-
   - name: install apache and php
     package:
       name: "{{ item }}"
@@ -65,13 +49,14 @@
       enabled: yes
   
   - name: create count files
-    shell: echo "0" > {{ item }}
+    shell: echo "{{ item.input }}" > {{ item.name }}
     args:
       chdir: /var/www/html
     with_items:
-      - "countlog.txt"
-      - "success_countlog.txt"
-      - "failed_countlog.txt"
+      - { name: "countlog.txt", input: "0" }
+      - { name: "success_countlog.txt", input: "0" }
+      - { name: "failed_countlog.txt", input: "0" }
+      - { name: "push_queue.txt", input: "" }
 
   - name: change permissions of count files
     file:
@@ -84,6 +69,23 @@
       - "countlog.txt"
       - "success_countlog.txt"
       - "failed_countlog.txt"
+      - "push_queue.txt"
+
+  - name: copy repo list
+    template:
+      src: "repo_list.txt"
+      dest: "/var/www/html/repo_list"
+      mode: 0764
+      owner: apache
+      group: apache
+
+  - name: read repo list
+    command: cat /var/www/html/repo_list
+    register: repo_list
+
+  - name: set total_repos variable
+    set_fact:
+      total_repos: "{{ repo_list.stdout_lines|length }}"
 
   - name: copy webpage templates
     template:
@@ -95,6 +97,8 @@
     with_items:
       - { src: "index.php.j2", dest: "index.php" }
       - { src: "table.html.j2", dest: "table.html" }
+      - { src: "queue_table.html.j2", dest: "queue_table.html" }
+      - { src: "repo_list.txt", dest: "repo_list" }
 
   - name: allow connections to httpd
     shell: "{{ item }}"
@@ -110,7 +114,7 @@
       enabled: yes
   become: true
   become_user: root
-  when: "inventory_hostname == groups.all[0] and set_up_webpage"
+  when: "inventory_hostname == groups.all[0]"
 ###############################
 
 - name: copy bash script
@@ -131,4 +135,4 @@
 - name: show webpage address
   debug:
     msg: "Go to http://{{ groups.all[0] }} for the conversion status page."
-  when: "inventory_hostname == groups.all[0] and set_up_webpage"
+  when: "inventory_hostname == groups.all[0]"

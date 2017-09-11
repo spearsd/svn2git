@@ -1,14 +1,12 @@
 ---
 # vars file for svn2git
 
-remote_working_dir: /opt/svn2git/tmp
 install_dir: /opt/svn2git
 svn_username: test
 svn_password: test
 git_username: admin
 git_password: dustinscott
-git_repo_url: 34.202.9.105:7990
+git_repo_url: 10.146.13.109:7990
 project_key: GIT
 
-set_up_webpage: true
 token: "Ka5DbmilNU5iL3lprTmlNfn4AN4Lp2vTG8nKRfj2"

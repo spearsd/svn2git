@@ -13,17 +13,30 @@ PROJECT_KEY='{{ project_key }}'
 
 check_errors()
 {
+	sed -i "s/$SVN_USERNAME/\*\*\*\*/g" $LOG_DIRECTORY/$reponame.log
+	sed -i "s/$SVN_PASSWORD/\*\*\*\*/g" $LOG_DIRECTORY/$reponame.log
+	sed -i "s/$GIT_USERNAME/\*\*\*\*/g" $LOG_DIRECTORY/$reponame.log
+	sed -i "s/$GIT_PASSWORD/\*\*\*\*/g" $LOG_DIRECTORY/$reponame.log
 	error_check=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad \|errors\":" | cut -c-75 | head -1)
 	if [ ! -z "$error_check" ]; then
 		calculate_duration
 		errors=$error_check
 		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> /dev/null 2>&1
+		curl --data "token=$TOKEN&push_queue_remove=true&push_queue_repo=$p" -X POST $WEBPAGE_URL >> /dev/null 2>&1
+		echo "-----------------------------------------------------" >> $LOG_DIRECTORY/main_log.log
+		echo "$reponame" >> $LOG_DIRECTORY/main_log.log
+		echo "-----------------------------------------------------" >> $LOG_DIRECTORY/main_log.log
+		echo $(cat $LOG_DIRECTORY/$reponame.log) >> $LOG_DIRECTORY/main_log.log
 		continue 2
 	fi
 }
 
 final_error_check()
 {
+	sed -i "s/$SVN_USERNAME/\*\*\*\*/g" $LOG_DIRECTORY/$reponame.log
+	sed -i "s/$SVN_PASSWORD/\*\*\*\*/g" $LOG_DIRECTORY/$reponame.log
+	sed -i "s/$GIT_USERNAME/\*\*\*\*/g" $LOG_DIRECTORY/$reponame.log
+	sed -i "s/$GIT_PASSWORD/\*\*\*\*/g" $LOG_DIRECTORY/$reponame.log
 	log_result=$(cat $LOG_DIRECTORY/$reponame.log | grep "new branch" | cut -c-15 | head -1)
 	get_error=$(cat $LOG_DIRECTORY/$reponame.log | grep "fatal:\|error:\|Bad \|errors\":" | cut -c-75 | head -1)
 	if [ ! -z "$log_result" ]; then
@@ -38,11 +51,11 @@ final_error_check()
 			calculate_duration
 			errors=$get_error
 			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> /dev/null 2>&1
+		else
+			calculate_duration
+			errors="Unknown condition."
+			curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> /dev/null 2>&1
 		fi
-	else
-		calculate_duration
-		errors="Unknown condition."
-		curl --data "token=$TOKEN&status=failed&ip_address=$IP_ADDRESS&repo_name=$reponame&error_msg=$errors&duration=${hours}h ${minutes}m ${seconds}s" -X POST $WEBPAGE_URL >> /dev/null 2>&1
 	fi
 }
 
@@ -55,8 +68,15 @@ calculate_duration()
 	seconds=$(($hminusm % 60))
 }
 # Should we go ahead and call git svn clone here so we can loop over it? Each repo has to have everything else done to it so...
-while IFS= read -r p || [ -n "$p" ];
+# ensure there is a blank line at the end of the authors file
+echo "" >> $INSTALL_DIR/repos/authors
+while true
 do
+	# could also pass the host and set a status to processing
+	p=$(curl --data "token=$TOKEN&get_next_repo=true" -X POST $WEBPAGE_URL)
+	if [ -z "$p" ]; then
+		break
+	fi
 	# timer for duration
 	SECONDS=0
 	
@@ -91,9 +111,9 @@ do
 	sort -o authors authors
 	#sed -i '/^\s*$/d' ./authors
 	#sed -i '/ =   <@cgi.com>/d' ./authors
-	#rm -f new_authors
-	#rm -f svn_authors
-	#rm -f authorsToAdd
+	rm -f new_authors
+	rm -f svn_authors
+	rm -f authorsToAdd
 
 	# clone the svn repo
 	# for cloning with credentials try:
@@ -130,7 +150,16 @@ do
 # Remove the trunk branch. It is already now in git as the master branch.
 	git branch -d trunk >> $LOG_DIRECTORY/$reponame.log 2>&1
 	check_errors
-	
+
+	push_check=$(curl --data "token=$TOKEN&push_queue_check=true" -X POST $WEBPAGE_URL) >> /dev/null 2>&1
+	while [ "$push_check" != "true" ];
+	do
+		sleep 5
+		push_check=$(curl --data "token=$TOKEN&push_queue_check=true" -X POST $WEBPAGE_URL) >> /dev/null 2>&1
+	done
+	curl --data "token=$TOKEN&push_queue_add=true&push_queue_repo=$p" -X POST $WEBPAGE_URL >> /dev/null 2>&1
+
+	#sleep $(( ( RANDOM % 30 )  + 15 ))
 # Create the Bitbucket repository to push converted svn repo to.
 # To create repo: json needs name, has_wiki, is_private, and project with sub-info key.
 	curl -u $GIT_USERNAME:$GIT_PASSWORD -X POST -d '{ "name": '\""$reponame\""', "has_wiki": false, "is_private": true, "project": {"key": '\""$PROJECT_KEY\""'} }' -H "Content-Type: application/json" --basic $GIT_REPO_DIR/rest/api/1.0/projects/$PROJECT_KEY/repos >> $LOG_DIRECTORY/$reponame.log 2>&1
@@ -148,6 +177,7 @@ do
 	git push origin --all >> $LOG_DIRECTORY/$reponame.log 2>&1
 	final_error_check
 
+	curl --data "token=$TOKEN&push_queue_remove=true&push_queue_repo=$p" -X POST $WEBPAGE_URL >> /dev/null 2>&1
 # If the push was a success, should we clean up the git repository since it now lives in Bitbucket and is not needed locally?
 	
 	# finally, add repo results to main log file
@@ -156,7 +186,7 @@ do
 	echo "-----------------------------------------------------" >> $LOG_DIRECTORY/main_log.log
 	echo $(cat $LOG_DIRECTORY/$reponame.log) >> $LOG_DIRECTORY/main_log.log
 
-done < $INSTALL_DIR/repo_list
+done
 
 #################################################
 # NOTES											#
@@ -184,7 +214,7 @@ done < $INSTALL_DIR/repo_list
 # for using svn dump files. NOTE: Must have a way to pull or copy the dump files over...
 
 #svn_dump_migration()
-#{
+# {
 	#svnadmin create $reponame
 	#svnadmin load --force-uuid $INSTALL_DIR/repos/$reponame < $DUMP_FILE
 	#git svn clone file://$INSTALL_DIR/repos/$reponame --authors-file="authors" --stdlayout --prefix="origin/" -s $reponame-"git" > $LOG_DIRECTORY/$reponame.log 2>&1
