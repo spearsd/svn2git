@@ -1,1 +1,1 @@
-default = default default <default@cgi.com>
+default = default default <default@email.com>
